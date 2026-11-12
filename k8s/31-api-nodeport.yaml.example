@@ -1,0 +1,15 @@
+# İsteğe bağlı: sunucudaki nginx'in pod'a ulaşması için sabit bir port.
+# Kullanmak için .example uzantısını kaldırıp apply edin.
+apiVersion: v1
+kind: Service
+metadata:
+  name: evrota-api-nodeport
+  namespace: evrota
+spec:
+  type: NodePort
+  selector: { app: evrota-api }
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+      nodePort: 30880

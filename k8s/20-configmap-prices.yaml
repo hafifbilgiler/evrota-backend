@@ -1,0 +1,16 @@
+# Fiyatlar: değiştirip `kubectl apply -f k8s/20-configmap-prices.yaml` yapın,
+# pod ~1 dk içinde yeni dosyayı görür (yeniden başlatma gerekmez).
+# null bırakılan alanlar uygulamada otomatik doldurulmaz.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: evrota-prices
+  namespace: evrota
+data:
+  prices.json: |
+    {
+      "updated": "",
+      "electricity": { "homeTlKwh": null, "source": "" },
+      "fuel": { "benzinTlL": null, "motorinTlL": null, "source": "" },
+      "charging": { "dcAvgTlKwh": null, "acAvgTlKwh": null, "operators": [] }
+    }

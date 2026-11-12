@@ -1,0 +1,5 @@
+.git
+k8s
+*.md
+__pycache__
+.pytest_cache

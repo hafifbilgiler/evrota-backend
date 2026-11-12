@@ -1,0 +1,586 @@
+{
+ "version": 1,
+ "updated": "2026-11-13",
+ "vehicles": [
+  {
+   "id": "togg-t10x-v2-lr",
+   "brand": "Togg",
+   "model": "T10X V2 Uzun Menzil",
+   "body": "SUV",
+   "batteryKwh": 88.5,
+   "rangeWltp": 523,
+   "dcMaxKw": 150,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 28,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "togg-t10x-v1-sr",
+   "brand": "Togg",
+   "model": "T10X V1 Standart Menzil",
+   "body": "SUV",
+   "batteryKwh": 52.4,
+   "rangeWltp": 314,
+   "dcMaxKw": 150,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 28,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "togg-t10f-lr",
+   "brand": "Togg",
+   "model": "T10F Uzun Menzil",
+   "body": "Sedan",
+   "batteryKwh": 88.5,
+   "rangeWltp": 623,
+   "dcMaxKw": 180,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 28,
+   "isNew": true,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "tesla-my-rwd",
+   "brand": "Tesla",
+   "model": "Model Y Arkadan İtiş",
+   "body": "SUV",
+   "batteryKwh": 60.0,
+   "rangeWltp": 500,
+   "dcMaxKw": 175,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 25,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2",
+    "Tesla"
+   ]
+  },
+  {
+   "id": "tesla-my-lr",
+   "brand": "Tesla",
+   "model": "Model Y Long Range AWD",
+   "body": "SUV",
+   "batteryKwh": 78.0,
+   "rangeWltp": 586,
+   "dcMaxKw": 250,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 27,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2",
+    "Tesla"
+   ]
+  },
+  {
+   "id": "tesla-m3-rwd",
+   "brand": "Tesla",
+   "model": "Model 3 Arkadan İtiş",
+   "body": "Sedan",
+   "batteryKwh": 57.5,
+   "rangeWltp": 554,
+   "dcMaxKw": 170,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 25,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2",
+    "Tesla"
+   ]
+  },
+  {
+   "id": "tesla-m3-lr",
+   "brand": "Tesla",
+   "model": "Model 3 Long Range AWD",
+   "body": "Sedan",
+   "batteryKwh": 75.0,
+   "rangeWltp": 629,
+   "dcMaxKw": 250,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 27,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2",
+    "Tesla"
+   ]
+  },
+  {
+   "id": "byd-atto3",
+   "brand": "BYD",
+   "model": "Atto 3",
+   "body": "SUV",
+   "batteryKwh": 60.5,
+   "rangeWltp": 420,
+   "dcMaxKw": 88,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 44,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "byd-dolphin",
+   "brand": "BYD",
+   "model": "Dolphin",
+   "body": "Hatchback",
+   "batteryKwh": 60.4,
+   "rangeWltp": 427,
+   "dcMaxKw": 88,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 40,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "byd-seal",
+   "brand": "BYD",
+   "model": "Seal RWD",
+   "body": "Sedan",
+   "batteryKwh": 82.5,
+   "rangeWltp": 570,
+   "dcMaxKw": 150,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 37,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "byd-sealu",
+   "brand": "BYD",
+   "model": "Seal U",
+   "body": "SUV",
+   "batteryKwh": 87.0,
+   "rangeWltp": 500,
+   "dcMaxKw": 140,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 43,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "byd-sealion7",
+   "brand": "BYD",
+   "model": "Sealion 7",
+   "body": "SUV",
+   "batteryKwh": 82.5,
+   "rangeWltp": 502,
+   "dcMaxKw": 150,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 32,
+   "isNew": true,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "mg4-sr",
+   "brand": "MG",
+   "model": "MG4 Standart",
+   "body": "Hatchback",
+   "batteryKwh": 51.0,
+   "rangeWltp": 350,
+   "dcMaxKw": 117,
+   "acMaxKw": 6.6,
+   "dc10to80Min": 35,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "mg4-lr",
+   "brand": "MG",
+   "model": "MG4 Uzun Menzil",
+   "body": "Hatchback",
+   "batteryKwh": 64.0,
+   "rangeWltp": 435,
+   "dcMaxKw": 135,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 35,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "mg-zs-ev",
+   "brand": "MG",
+   "model": "ZS EV",
+   "body": "SUV",
+   "batteryKwh": 70.0,
+   "rangeWltp": 440,
+   "dcMaxKw": 92,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 42,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "hyundai-kona",
+   "brand": "Hyundai",
+   "model": "Kona Electric 65 kWh",
+   "body": "SUV",
+   "batteryKwh": 65.4,
+   "rangeWltp": 514,
+   "dcMaxKw": 102,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 41,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "hyundai-ioniq5",
+   "brand": "Hyundai",
+   "model": "IONIQ 5 84 kWh",
+   "body": "SUV",
+   "batteryKwh": 84.0,
+   "rangeWltp": 570,
+   "dcMaxKw": 235,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 18,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "kia-ev3",
+   "brand": "Kia",
+   "model": "EV3 Uzun Menzil",
+   "body": "SUV",
+   "batteryKwh": 81.4,
+   "rangeWltp": 605,
+   "dcMaxKw": 128,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 31,
+   "isNew": true,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "kia-ev6",
+   "brand": "Kia",
+   "model": "EV6 84 kWh",
+   "body": "Crossover",
+   "batteryKwh": 84.0,
+   "rangeWltp": 582,
+   "dcMaxKw": 258,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 18,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "renault-5",
+   "brand": "Renault",
+   "model": "5 E-Tech 52 kWh",
+   "body": "Hatchback",
+   "batteryKwh": 52.0,
+   "rangeWltp": 410,
+   "dcMaxKw": 100,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 30,
+   "isNew": true,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "renault-megane",
+   "brand": "Renault",
+   "model": "Megane E-Tech 60 kWh",
+   "body": "Crossover",
+   "batteryKwh": 60.0,
+   "rangeWltp": 450,
+   "dcMaxKw": 130,
+   "acMaxKw": 22.0,
+   "dc10to80Min": 32,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "vw-id3",
+   "brand": "Volkswagen",
+   "model": "ID.3 Pro",
+   "body": "Hatchback",
+   "batteryKwh": 59.0,
+   "rangeWltp": 434,
+   "dcMaxKw": 120,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 30,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "vw-id4",
+   "brand": "Volkswagen",
+   "model": "ID.4 Pro",
+   "body": "SUV",
+   "batteryKwh": 77.0,
+   "rangeWltp": 550,
+   "dcMaxKw": 135,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 28,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "cupra-born",
+   "brand": "Cupra",
+   "model": "Born 59 kWh",
+   "body": "Hatchback",
+   "batteryKwh": 59.0,
+   "rangeWltp": 425,
+   "dcMaxKw": 120,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 30,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "skoda-enyaq",
+   "brand": "Skoda",
+   "model": "Enyaq 85",
+   "body": "SUV",
+   "batteryKwh": 77.0,
+   "rangeWltp": 570,
+   "dcMaxKw": 135,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 28,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "bmw-ix1",
+   "brand": "BMW",
+   "model": "iX1 eDrive20",
+   "body": "SUV",
+   "batteryKwh": 64.7,
+   "rangeWltp": 475,
+   "dcMaxKw": 130,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 29,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "bmw-i4",
+   "brand": "BMW",
+   "model": "i4 eDrive40",
+   "body": "Sedan",
+   "batteryKwh": 81.3,
+   "rangeWltp": 590,
+   "dcMaxKw": 205,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 31,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "mercedes-eqa",
+   "brand": "Mercedes-Benz",
+   "model": "EQA 250+",
+   "body": "SUV",
+   "batteryKwh": 70.5,
+   "rangeWltp": 528,
+   "dcMaxKw": 100,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 35,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "volvo-ex30",
+   "brand": "Volvo",
+   "model": "EX30 Uzun Menzil",
+   "body": "SUV",
+   "batteryKwh": 64.0,
+   "rangeWltp": 476,
+   "dcMaxKw": 153,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 27,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "peugeot-e2008",
+   "brand": "Peugeot",
+   "model": "e-2008 54 kWh",
+   "body": "SUV",
+   "batteryKwh": 51.0,
+   "rangeWltp": 406,
+   "dcMaxKw": 100,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 30,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "opel-corsa",
+   "brand": "Opel",
+   "model": "Corsa Electric",
+   "body": "Hatchback",
+   "batteryKwh": 51.0,
+   "rangeWltp": 402,
+   "dcMaxKw": 100,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 30,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "fiat-600e",
+   "brand": "Fiat",
+   "model": "600e",
+   "body": "SUV",
+   "batteryKwh": 51.0,
+   "rangeWltp": 409,
+   "dcMaxKw": 100,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 30,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "citroen-ec4",
+   "brand": "Citroën",
+   "model": "ë-C4 54 kWh",
+   "body": "Hatchback",
+   "batteryKwh": 51.0,
+   "rangeWltp": 420,
+   "dcMaxKw": 100,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 30,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "smart-1",
+   "brand": "smart",
+   "model": "#1 Pro+",
+   "body": "SUV",
+   "batteryKwh": 62.0,
+   "rangeWltp": 420,
+   "dcMaxKw": 150,
+   "acMaxKw": 22.0,
+   "dc10to80Min": 30,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "leapmotor-t03",
+   "brand": "Leapmotor",
+   "model": "T03",
+   "body": "Hatchback",
+   "batteryKwh": 36.3,
+   "rangeWltp": 265,
+   "dcMaxKw": 48,
+   "acMaxKw": 6.6,
+   "dc10to80Min": 36,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "porsche-taycan",
+   "brand": "Porsche",
+   "model": "Taycan 4S",
+   "body": "Sedan",
+   "batteryKwh": 97.0,
+   "rangeWltp": 630,
+   "dcMaxKw": 320,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 18,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  }
+ ]
+}

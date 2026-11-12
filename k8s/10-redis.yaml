@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: evrota-redis
+  namespace: evrota
+  labels: { app: evrota-redis }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: evrota-redis }
+  template:
+    metadata:
+      labels: { app: evrota-redis }
+    spec:
+      containers:
+        - name: redis
+          image: docker.io/library/redis:7.4-alpine
+          args: ["--save", "", "--appendonly", "no", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+          ports:
+            - containerPort: 6379
+          resources:
+            requests: { cpu: 20m, memory: 32Mi }
+            limits: { memory: 192Mi }
+          readinessProbe:
+            exec: { command: ["redis-cli", "ping"] }
+            initialDelaySeconds: 3
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: evrota-redis
+  namespace: evrota
+spec:
+  selector: { app: evrota-redis }
+  ports:
+    - port: 6379
+      targetPort: 6379

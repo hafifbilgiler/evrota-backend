@@ -1,0 +1,7 @@
+{
+  "updated": "",
+  "note": "Bu dosya k8s/configmap-prices.yaml ile değiştirilir. Değerleri gerçek ve güncel fiyatlarla doldurun; boş (null) bırakılan alanlar uygulamada otomatik doldurulmaz.",
+  "electricity": { "homeTlKwh": null, "source": "" },
+  "fuel": { "benzinTlL": null, "motorinTlL": null, "source": "" },
+  "charging": { "dcAvgTlKwh": null, "acAvgTlKwh": null, "operators": [] }
+}

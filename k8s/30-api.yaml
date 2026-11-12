@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: evrota-api
+  namespace: evrota
+  labels: { app: evrota-api }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: evrota-api }
+  template:
+    metadata:
+      labels: { app: evrota-api }
+    spec:
+      containers:
+        - name: api
+          image: docker.io/hafifbilgiler/evrota-backend:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            - name: REDIS_URL
+              value: redis://evrota-redis:6379/0
+            - name: PRICES_FILE
+              value: /config/prices.json
+            - name: GOOGLE_PLACES_API_KEY
+              valueFrom:
+                secretKeyRef: { name: evrota-secrets, key: GOOGLE_PLACES_API_KEY }
+          volumeMounts:
+            - name: prices
+              mountPath: /config
+              readOnly: true
+          resources:
+            requests: { cpu: 50m, memory: 96Mi }
+            limits: { memory: 384Mi }
+          readinessProbe:
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 15
+            periodSeconds: 30
+      volumes:
+        - name: prices
+          configMap:
+            name: evrota-prices
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: evrota-api
+  namespace: evrota
+spec:
+  selector: { app: evrota-api }
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
