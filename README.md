@@ -27,6 +27,8 @@ namespace'inde (`evrota`) çalışır; başka hiçbir servisle kaynak paylaşmaz
 | `GET /stations?lat=&lng=&radius=` | Yakındaki şarj istasyonları, soketler, anlık doluluk + kullanıcı bildirim özeti |
 | `POST /stations/{id}/reports` | Bildirim: `Calisiyor`, `Kuyruk`, `Arizali`, `Kapali` |
 | `GET /stations/{id}/reports` | Son 6 saatin bildirim özeti |
+| `GET /news?limit=&category=&before=` | EV haberleri: özet, "neden önemli", öne çıkan bilgiler, katalogdaki araç + kaynak linki |
+| `GET /vehicles/{id}/insight` | AI araç değerlendirmesi (artılar, eksiler, kime uygun, rakipler); katalog verisine dayalı, 30 gün önbellek |
 
 İstasyon verisi Google Places API (New) `evChargeOptions` alanından gelir. Maliyet için
 3 dk önbellek, günlük çağrı sınırı (`DAILY_PLACES_CAP`, varsayılan 1500) ve Google'a
@@ -87,3 +89,22 @@ location /evrota/ {
 `k8s/20-configmap-prices.yaml` içindeki değerleri doldurup `kubectl apply` yapın; pod
 dosyayı her istekte okur. `null` bırakılan alanlar uygulamada otomatik doldurulmaz.
 Otomatik toplama (EPDK tarifesi, akaryakıt, operatör tarifeleri) sonraki adım.
+
+## Haberler
+
+`evrota-news` CronJob'ı saatte bir `k8s/21-configmap-news.yaml` içindeki RSS akışlarını tarar:
+tekrarları birleştirir, `GEMINI_API_KEY` varsa EV dışı haberleri eler, haberi kendi
+cümlelerimizle özetler ve kategori/marka/model/fiyat çıkarır (yoksa anahtar kelime filtresi).
+Yeni model / fiyat haberleri Redis'te `news:drafts` listesine katalog taslağı olarak düşer.
+Haber metni kopyalanmaz; uygulama başlık, özet, kaynak adı ve orijinal linki gösterir.
+
+```bash
+# Gemini anahtarı (isteğe bağlı ama önerilir)
+kubectl -n evrota patch secret evrota-secrets -p '{"stringData":{"GEMINI_API_KEY":"xxxx"}}'
+# Elle bir tarama başlat
+kubectl -n evrota create job --from=cronjob/evrota-news news-manual-$(date +%s)
+kubectl -n evrota logs -l job-name --tail=20
+# Kapalı yayıncı akışlarını test et (200 ve <rss/<feed görmelisiniz)
+for u in https://www.webtekno.com/rss.xml https://shiftdelete.net/feed https://tr.motor1.com/rss/news/all/ https://www.donanimhaber.com/rss/tum/; do
+  printf "%s → " "$u"; curl -s -m 10 -o /tmp/f -w "%{http_code} " "$u"; head -c 300 /tmp/f | grep -o -m1 -E "<rss|<feed" || echo "RSS değil"; done
+```

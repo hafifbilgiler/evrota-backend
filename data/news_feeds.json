@@ -1,0 +1,124 @@
+{
+ "note": "type=publisher: yayıncının kendi RSS'i (ana kaynak). type=discovery: Google Haberler (sadece keşif). enabled=false olanlar doğrulanmadı; sunucuda test edip açın.",
+ "feeds": [
+  {
+   "name": "Google Haberler: elektrikli araç",
+   "type": "discovery",
+   "url": "https://news.google.com/rss/search?q=elektrikli+ara%C3%A7+when:2d&hl=tr&gl=TR&ceid=TR:tr"
+  },
+  {
+   "name": "Google Haberler: şarj istasyonu",
+   "type": "discovery",
+   "url": "https://news.google.com/rss/search?q=%C5%9Farj+istasyonu+when:3d&hl=tr&gl=TR&ceid=TR:tr"
+  },
+  {
+   "name": "Google Haberler: Togg",
+   "type": "discovery",
+   "url": "https://news.google.com/rss/search?q=Togg+when:2d&hl=tr&gl=TR&ceid=TR:tr"
+  },
+  {
+   "name": "Google Haberler: elektrikli otomobil fiyat",
+   "type": "discovery",
+   "url": "https://news.google.com/rss/search?q=elektrikli+otomobil+fiyat+when:3d&hl=tr&gl=TR&ceid=TR:tr"
+  },
+  {
+   "name": "Google Haberler: EPDK şarj",
+   "type": "discovery",
+   "url": "https://news.google.com/rss/search?q=EPDK+%C5%9Farj+when%3A7d&hl=tr&gl=TR&ceid=TR%3Atr"
+  },
+  {
+   "name": "Google Haberler: şarj ücreti zam",
+   "type": "discovery",
+   "url": "https://news.google.com/rss/search?q=%C5%9Farj+%C3%BCcreti+zam+when%3A3d&hl=tr&gl=TR&ceid=TR%3Atr"
+  },
+  {
+   "name": "Google Haberler: Volkswagen ID",
+   "type": "discovery",
+   "url": "https://news.google.com/rss/search?q=Volkswagen+ID+when%3A3d&hl=tr&gl=TR&ceid=TR%3Atr"
+  },
+  {
+   "name": "Google Haberler: Mercedes elektrikli",
+   "type": "discovery",
+   "url": "https://news.google.com/rss/search?q=Mercedes+elektrikli+when%3A3d&hl=tr&gl=TR&ceid=TR%3Atr"
+  },
+  {
+   "name": "Google Haberler: BMW elektrikli",
+   "type": "discovery",
+   "url": "https://news.google.com/rss/search?q=BMW+elektrikli+when%3A3d&hl=tr&gl=TR&ceid=TR%3Atr"
+  },
+  {
+   "name": "Google Haberler: Volvo elektrikli",
+   "type": "discovery",
+   "url": "https://news.google.com/rss/search?q=Volvo+elektrikli+when%3A3d&hl=tr&gl=TR&ceid=TR%3Atr"
+  },
+  {
+   "name": "Google Haberler: Renault elektrikli",
+   "type": "discovery",
+   "url": "https://news.google.com/rss/search?q=Renault+elektrikli+when%3A3d&hl=tr&gl=TR&ceid=TR%3Atr"
+  },
+  {
+   "name": "Google Haberler: Kia elektrikli",
+   "type": "discovery",
+   "url": "https://news.google.com/rss/search?q=Kia+elektrikli+when%3A3d&hl=tr&gl=TR&ceid=TR%3Atr"
+  },
+  {
+   "name": "Google Haberler: Hyundai elektrikli",
+   "type": "discovery",
+   "url": "https://news.google.com/rss/search?q=Hyundai+elektrikli+when%3A3d&hl=tr&gl=TR&ceid=TR%3Atr"
+  },
+  {
+   "name": "Google Haberler: MG elektrikli",
+   "type": "discovery",
+   "url": "https://news.google.com/rss/search?q=MG+elektrikli+when%3A3d&hl=tr&gl=TR&ceid=TR%3Atr"
+  },
+  {
+   "name": "Google Haberler: BYD Türkiye",
+   "type": "discovery",
+   "url": "https://news.google.com/rss/search?q=BYD+T%C3%BCrkiye+when%3A2d&hl=tr&gl=TR&ceid=TR%3Atr"
+  },
+  {
+   "name": "Google Haberler: Tesla Türkiye",
+   "type": "discovery",
+   "url": "https://news.google.com/rss/search?q=Tesla+T%C3%BCrkiye+when%3A2d&hl=tr&gl=TR&ceid=TR%3Atr"
+  },
+  {
+   "name": "Google Haberler: yeni elektrikli SUV",
+   "type": "discovery",
+   "url": "https://news.google.com/rss/search?q=yeni+elektrikli+SUV+when%3A3d&hl=tr&gl=TR&ceid=TR%3Atr"
+  },
+  {
+   "name": "Google Haberler: elektrikli otomobil fiyat listesi",
+   "type": "discovery",
+   "url": "https://news.google.com/rss/search?q=elektrikli+otomobil+fiyat+listesi+when%3A3d&hl=tr&gl=TR&ceid=TR%3Atr"
+  },
+  {
+   "name": "Google Haberler: elektrikli Türkiye'de satışa sunuldu",
+   "type": "discovery",
+   "url": "https://news.google.com/rss/search?q=elektrikli+T%C3%BCrkiye%27de+sat%C4%B1%C5%9Fa+sunuldu+when%3A3d&hl=tr&gl=TR&ceid=TR%3Atr"
+  },
+  {
+   "name": "Webtekno",
+   "type": "publisher",
+   "url": "https://www.webtekno.com/rss.xml",
+   "enabled": false
+  },
+  {
+   "name": "ShiftDelete.Net",
+   "type": "publisher",
+   "url": "https://shiftdelete.net/feed",
+   "enabled": false
+  },
+  {
+   "name": "Motor1 Türkiye",
+   "type": "publisher",
+   "url": "https://tr.motor1.com/rss/news/all/",
+   "enabled": false
+  },
+  {
+   "name": "DonanımHaber",
+   "type": "publisher",
+   "url": "https://www.donanimhaber.com/rss/tum/",
+   "enabled": false
+  }
+ ]
+}

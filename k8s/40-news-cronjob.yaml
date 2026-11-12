@@ -1,0 +1,50 @@
+# Saatte bir EV haberlerini tarar ve Redis'e yazar (API /news buradan okur).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: evrota-news
+  namespace: evrota
+spec:
+  schedule: "7 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 600
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: news
+              image: docker.io/hafifbilgiler/evrota-backend:0.4.0
+              command: ["python", "-m", "app.news_job"]
+              env:
+                - name: REDIS_URL
+                  value: redis://evrota-redis:6379/0
+                - name: NEWS_FEEDS_FILE
+                  value: /config/news_feeds.json
+                - name: GEMINI_API_KEY
+                  valueFrom:
+                    secretKeyRef: { name: evrota-secrets, key: GEMINI_API_KEY, optional: true }
+              volumeMounts:
+                - name: feeds
+                  mountPath: /config
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+              securityContext:
+                runAsNonRoot: true
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: ["ALL"] }
+              resources:
+                requests: { cpu: 20m, memory: 64Mi }
+                limits: { memory: 256Mi }
+          volumes:
+            - name: feeds
+              configMap:
+                name: evrota-news-feeds
+            - name: tmp
+              emptyDir: {}

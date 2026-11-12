@@ -8,6 +8,8 @@ EVrota backend
   GET  /stations?lat=&lng=&radius=   yakındaki şarj istasyonları + anlık doluluk (Google Places)
   POST /stations/{id}/reports        kullanıcı bildirimi: çalışıyor / kuyruk / arızalı / kapalı
   GET  /stations/{id}/reports        son 6 saatin bildirim özeti
+  GET  /news?limit=&category=&before= EV haberleri (kendi özetimiz + kaynak linki)
+  GET  /vehicles/{id}/insight        AI araç değerlendirmesi (katalog verisine dayalı)
 """
 import json
 import logging
@@ -23,12 +25,12 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel, Field
 
-from . import auth, cache, config, places
+from . import auth, cache, config, insights, news, places
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("evrota")
 
-VERSION = "0.2.0"
+VERSION = "0.4.0"
 
 
 @asynccontextmanager
@@ -236,3 +238,31 @@ async def get_reports(station_id: str, _: str = Depends(auth.require_device)):
     if not _ID_RE.match(station_id):
         raise HTTPException(400, "Geçersiz istasyon")
     return await _report_summary(station_id)
+
+
+# ── Haberler ───────────────────────────────────────────────────
+@app.get("/news")
+async def get_news(limit: int = 30, category: Optional[str] = None, before: Optional[int] = None,
+                   _: str = Depends(auth.require_device)):
+    limit = max(1, min(limit, 50))
+    if category and category not in news.CATEGORIES:
+        raise HTTPException(400, "Geçersiz kategori")
+    items = await news.latest(limit, category, before)
+    # Haberdeki araç katalogda varsa teknik özetini ekle
+    cat = {v["id"]: v for v in news._catalog()}
+    for it in items:
+        v = cat.get(it.get("vehicleId") or "")
+        it["vehicle"] = None if v is None else {
+            "id": v["id"], "name": f'{v["brand"]} {v["model"]}', "batteryKwh": v["batteryKwh"],
+            "rangeWltp": v["rangeWltp"], "dcMaxKw": v["dcMaxKw"], "dc10to80Min": v["dc10to80Min"]}
+    return {"items": items, "count": len(items)}
+
+
+@app.get("/vehicles/{vehicle_id}/insight")
+async def vehicle_insight(vehicle_id: str, _: str = Depends(auth.require_device)):
+    if not _ID_RE.match(vehicle_id):
+        raise HTTPException(400, "Geçersiz araç")
+    res = await insights.get_insight(vehicle_id)
+    if res is None:
+        raise HTTPException(404, "Araç bulunamadı")
+    return res

@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: api
-          image: docker.io/hafifbilgiler/evrota-backend:0.2.0
+          image: docker.io/hafifbilgiler/evrota-backend:0.4.0
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
@@ -29,6 +29,9 @@ spec:
             - name: EVROTA_JWT_SECRET
               valueFrom:
                 secretKeyRef: { name: evrota-secrets, key: EVROTA_JWT_SECRET }
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef: { name: evrota-secrets, key: GEMINI_API_KEY, optional: true }
           volumeMounts:
             - name: prices
               mountPath: /config
