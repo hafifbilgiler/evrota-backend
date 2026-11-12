@@ -3,11 +3,25 @@
 Elektrikli araç uygulaması **EVrota**'nın API'si. FastAPI + Redis, Kubernetes'te kendi
 namespace'inde (`evrota`) çalışır; başka hiçbir servisle kaynak paylaşmaz.
 
+## Güvenlik
+
+- `POST /auth/device {"deviceId": "<uuid>"}` → imzalı cihaz token'ı (JWT, 30 gün).
+  Aşağıdaki tüm uçlar `Authorization: Bearer <token>` ister; yoksa / sahteyse / süresi
+  dolmuşsa **401**.
+- IP başına saatte en fazla `TOKENS_PER_IP_HOUR` (10) token; token başına dakikada
+  `REQUESTS_PER_MINUTE` (60), günde `REQUESTS_PER_DAY` (2000) istek.
+- Aynı cihaz aynı istasyona 10 dakikada bir bildirim verebilir; bildirimler cihaza bağlı.
+- `/docs` ve `/openapi.json` kapalı, gövde boyutu sınırlı, hata mesajlarında iç bilgi yok.
+- Bir cihazı engellemek: `redis-cli SET blockdev:<deviceId> 1`
+- `EVROTA_JWT_SECRET` (en az 32 karakter) yoksa servis başlamaz.
+- Play Integrity: `PLAY_INTEGRITY_REQUIRED=true` ile açılacak (doğrulayıcı sonraki sürümde).
+
 ## Uçlar
 
 | Uç | Açıklama |
 |---|---|
-| `GET /health` | Durum, Redis ve Places anahtarı var mı |
+| `GET /health` | Durum (açık) |
+| `POST /auth/device` | Cihaz token'ı (açık) |
 | `GET /vehicles` | Araç kataloğu (`data/vehicles.json`, uygulamadaki dosyayla aynı biçim) |
 | `GET /prices` | Elektrik / akaryakıt / şarj fiyatları (ConfigMap'ten) |
 | `GET /stations?lat=&lng=&radius=` | Yakındaki şarj istasyonları, soketler, anlık doluluk + kullanıcı bildirim özeti |
@@ -26,10 +40,11 @@ kubectl apply -f k8s/00-namespace.yaml
 
 # Places anahtarı (EVrota için ayrı anahtar önerilir; IP kısıtlaması: sunucu IP'leri)
 kubectl -n evrota create secret generic evrota-secrets \
-  --from-literal=GOOGLE_PLACES_API_KEY=xxxxx
+  --from-literal=GOOGLE_PLACES_API_KEY=xxxxx \
+  --from-literal=EVROTA_JWT_SECRET="$(openssl rand -hex 32)"
 
-podman build -t docker.io/hafifbilgiler/evrota-backend:0.1.0 .
-podman push docker.io/hafifbilgiler/evrota-backend:0.1.0
+podman build -t docker.io/hafifbilgiler/evrota-backend:0.2.0 .
+podman push docker.io/hafifbilgiler/evrota-backend:0.2.0
 kubectl apply -f k8s/
 kubectl -n evrota get pods
 ```
@@ -47,7 +62,9 @@ kubectl apply -f k8s/     # manifest değiştiyse
 ```bash
 kubectl -n evrota port-forward svc/evrota-api 18000:8000 &
 curl -s localhost:18000/health
-curl -s "localhost:18000/stations?lat=40.99&lng=29.03" | head -c 600
+T=$(curl -s -X POST localhost:18000/auth/device -H 'content-type: application/json' \
+  -d '{"deviceId":"test-0000-0000-0000-000000000001"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')
+curl -s -H "Authorization: Bearer $T" "localhost:18000/stations?lat=40.99&lng=29.03" | head -c 600
 ```
 
 ## Dışarı açma

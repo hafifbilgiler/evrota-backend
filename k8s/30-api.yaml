@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: api
-          image: docker.io/hafifbilgiler/evrota-backend:0.1.0
+          image: docker.io/hafifbilgiler/evrota-backend:0.2.0
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
@@ -26,10 +26,20 @@ spec:
             - name: GOOGLE_PLACES_API_KEY
               valueFrom:
                 secretKeyRef: { name: evrota-secrets, key: GOOGLE_PLACES_API_KEY }
+            - name: EVROTA_JWT_SECRET
+              valueFrom:
+                secretKeyRef: { name: evrota-secrets, key: EVROTA_JWT_SECRET }
           volumeMounts:
             - name: prices
               mountPath: /config
               readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
           resources:
             requests: { cpu: 50m, memory: 96Mi }
             limits: { memory: 384Mi }
@@ -42,6 +52,8 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 30
       volumes:
+        - name: tmp
+          emptyDir: {}
         - name: prices
           configMap:
             name: evrota-prices

@@ -62,3 +62,16 @@ async def incr(key: str, ttl: int) -> int:
         return int(value)
     except Exception:
         return 0
+
+
+async def client_is_set() -> bool:
+    return _client is not None
+
+
+async def exists(key: str) -> bool:
+    if _client is None:
+        return False
+    try:
+        return bool(await _client.exists(key))
+    except Exception:
+        return False

@@ -14,3 +14,12 @@ REPORTS_PER_DEVICE_HOUR = int(os.getenv("REPORTS_PER_DEVICE_HOUR", "20"))
 DATA_DIR = os.getenv("DATA_DIR", os.path.join(os.path.dirname(os.path.dirname(__file__)), "data"))
 VEHICLES_FILE = os.getenv("VEHICLES_FILE", os.path.join(DATA_DIR, "vehicles.json"))
 PRICES_FILE = os.getenv("PRICES_FILE", os.path.join(DATA_DIR, "prices.json"))
+
+# ── Kimlik doğrulama ──
+JWT_SECRET = os.getenv("EVROTA_JWT_SECRET", "")
+TOKEN_TTL_DAYS = int(os.getenv("TOKEN_TTL_DAYS", "30"))
+TOKENS_PER_IP_HOUR = int(os.getenv("TOKENS_PER_IP_HOUR", "10"))
+REQUESTS_PER_MINUTE = int(os.getenv("REQUESTS_PER_MINUTE", "60"))
+REQUESTS_PER_DAY = int(os.getenv("REQUESTS_PER_DAY", "2000"))
+PLAY_INTEGRITY_REQUIRED = os.getenv("PLAY_INTEGRITY_REQUIRED", "false").lower() == "true"
+MAX_BODY_BYTES = int(os.getenv("MAX_BODY_BYTES", "16384"))
