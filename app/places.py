@@ -102,37 +102,91 @@ def normalize(place: dict, lat: float, lng: float) -> Optional[dict]:
     }
 
 
-async def search_stations(lat: float, lng: float, radius: int, operator: Optional[str] = None) -> Optional[list]:
+async def _post(client: httpx.AsyncClient, url: str, body: dict, fields: str) -> Optional[dict]:
+    headers = {"X-Goog-Api-Key": config.GOOGLE_PLACES_API_KEY, "X-Goog-FieldMask": fields}
+    r = await client.post(url, json=body, headers=headers)
+    if r.status_code != 200:
+        log.warning("Places HTTP %s: %s", r.status_code, r.text[:300])
+        return None
+    return r.json()
+
+
+def _rect(lat: float, lng: float, radius: int) -> dict:
+    """Metin araması daire kabul etmez; yarıçapı kapsayan dikdörtgen."""
+    dlat = radius / 111320.0
+    dlng = radius / (111320.0 * max(0.2, math.cos(math.radians(lat))))
+    return {"rectangle": {"low": {"latitude": lat - dlat, "longitude": lng - dlng},
+                          "high": {"latitude": lat + dlat, "longitude": lng + dlng}}}
+
+
+async def _text_pages(client, query: str, lat: float, lng: float, radius: int, pages: int):
+    """searchText ile sayfa sayfa (sayfa başı 20, en fazla 3 sayfa = 60) istasyon. (yerler, kalan_var, çağrı)"""
+    url = "https://places.googleapis.com/v1/places:searchText"
+    body = {"textQuery": query, "includedType": "electric_vehicle_charging_station",
+            "strictTypeFiltering": True, "pageSize": 20, "languageCode": "tr",
+            "locationRestriction": _rect(lat, lng, radius)}
+    found, token, calls = [], None, 0
+    for _ in range(pages):
+        if token:
+            body["pageToken"] = token
+        data = await _post(client, url, body, _FIELDS + ",nextPageToken")
+        calls += 1
+        if data is None:
+            break
+        found += data.get("places", [])
+        token = data.get("nextPageToken")
+        if not token:
+            break
+    return found, bool(token), calls
+
+
+async def search_stations(lat: float, lng: float, radius: int, operator: Optional[str] = None) -> Optional[dict]:
     """
     Yakındaki şarj istasyonları. Hata olursa None döner.
-    operator verilirse: o operatörün istasyonları metin aramasıyla bulunur (yakındaki 20 istasyonla
-    sınırlı kalmamak için), sonra operatöre göre süzülür.
+    Dönüş: {"stations": [...], "capped": bool (daha fazlası olabilir), "calls": Google çağrı sayısı}
+
+    - Firma yoksa: önce yakınlık sıralı 20 istasyon (searchNearby). 20'nin tamamı dolduysa ve yarıçap
+      genişse metin aramasıyla sayfa sayfa 60'a kadar genişletilir; böylece firma sayıları da doğru çıkar.
+    - Firma varsa: "<firma> şarj istasyonu" metin araması, 60'a kadar, sonra firmaya göre süzülür.
     """
     if not config.GOOGLE_PLACES_API_KEY:
         log.error("GOOGLE_PLACES_API_KEY tanımlı değil")
         return None
     circle = {"circle": {"center": {"latitude": lat, "longitude": lng}, "radius": float(radius)}}
-    if operator:
-        url = "https://places.googleapis.com/v1/places:searchText"
-        body = {"textQuery": f"{operator} şarj istasyonu", "includedType": "electric_vehicle_charging_station",
-                "strictTypeFiltering": True, "pageSize": 20, "languageCode": "tr", "locationBias": circle}
-    else:
-        url = "https://places.googleapis.com/v1/places:searchNearby"
-        body = {"includedTypes": ["electric_vehicle_charging_station"], "maxResultCount": 20,
-                "rankPreference": "DISTANCE", "languageCode": "tr", "locationRestriction": circle}
-    headers = {"X-Goog-Api-Key": config.GOOGLE_PLACES_API_KEY, "X-Goog-FieldMask": _FIELDS}
+    calls, capped, raw = 0, False, []
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(12.0, connect=4.0)) as client:
-            r = await client.post(url, json=body, headers=headers)
-        if r.status_code != 200:
-            log.warning("Places HTTP %s: %s", r.status_code, r.text[:300])
-            return None
-        out = [s for s in (normalize(p, lat, lng) for p in r.json().get("places", [])) if s]
-        if operator:
-            out = [s for s in out if s["operator"] == operator and s["distance"] <= radius * 1.5]
+            if operator:
+                raw, capped, calls = await _text_pages(client, f"{operator} şarj istasyonu", lat, lng, radius, 3)
+            else:
+                body = {"includedTypes": ["electric_vehicle_charging_station"], "maxResultCount": 20,
+                        "rankPreference": "DISTANCE", "languageCode": "tr", "locationRestriction": circle}
+                data = await _post(client, "https://places.googleapis.com/v1/places:searchNearby", body, _FIELDS)
+                calls += 1
+                if data is None:
+                    return None
+                raw = data.get("places", [])
+                if len(raw) >= 20:
+                    if radius > 3000:
+                        more, capped, c = await _text_pages(client, "elektrikli araç şarj istasyonu", lat, lng, radius, 3)
+                        calls += c
+                        raw += more
+                    else:
+                        capped = True
+        seen, out = set(), []
+        for p in raw:
+            st = normalize(p, lat, lng)
+            if not st or st["id"] in seen or st["distance"] > radius:
+                continue
+            if operator and st["operator"] != operator:
+                continue
+            seen.add(st["id"])
+            out.append(st)
         out.sort(key=lambda x: x["distance"])
-        log.info("Places → %d istasyon (%.4f,%.4f r=%d)", len(out), lat, lng, radius)
-        return out
+        if not operator and len(out) >= 60:
+            capped = True
+        log.info("Places → %d istasyon (%.4f,%.4f r=%d op=%s, %d çağrı)", len(out), lat, lng, radius, operator, calls)
+        return {"stations": out, "capped": capped, "calls": calls}
     except Exception as e:
         log.warning("Places hatası: %s", e)
         return None

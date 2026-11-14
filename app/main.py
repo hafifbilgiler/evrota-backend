@@ -32,7 +32,7 @@ from . import agent, auth, cache, config, insights, news, places
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("evrota")
 
-VERSION = "0.5.0"
+VERSION = "0.5.1"
 
 
 @asynccontextmanager
@@ -132,6 +132,34 @@ def _with_distance(payload: dict, lat: float, lng: float) -> dict:
     return payload
 
 
+def _counts(stations: list) -> dict:
+    out: dict = {}
+    for s in stations:
+        op = s.get("operator") or "Diğer"
+        out[op] = out.get(op, 0) + 1
+    return out
+
+
+async def _attach_counts(payload: dict, lat: float, lng: float, radius: int, operator: Optional[str]) -> None:
+    """
+    Firma çiplerindeki sayılar: o yarıçaptaki TÜM istasyonlara göre.
+    Firma seçiliyse, aynı yarıçapın "tüm firmalar" önbelleği varsa sayılar oradan gelir.
+    """
+    payload.setdefault("capped", False)
+    if not operator:
+        payload["operatorCounts"] = _counts(payload["stations"])
+        payload["countsCapped"] = payload["capped"]
+        return
+    allc = await cache.get_json(f"st:{round(lat, 2)}:{round(lng, 2)}:{radius}:*")
+    if allc:
+        payload["operatorCounts"] = _counts(allc["stations"])
+        payload["operatorCounts"][operator] = len(payload["stations"])
+        payload["countsCapped"] = allc.get("capped", False)
+    else:
+        payload["operatorCounts"] = {operator: len(payload["stations"])}
+        payload["countsCapped"] = True
+
+
 async def _attach_reports(stations: list) -> None:
     """Her istasyona son kullanıcı bildirimlerinin özetini ekler."""
     for s in stations:
@@ -162,6 +190,7 @@ async def _stations_payload(lat: float, lng: float, radius: int, operator: Optio
     cached = await cache.get_json(key)
     if cached:
         payload = _with_distance(cached, lat, lng)
+        await _attach_counts(payload, lat, lng, radius, operator)
         await _attach_reports(payload["stations"])
         return payload
 
@@ -170,12 +199,17 @@ async def _stations_payload(lat: float, lng: float, radius: int, operator: Optio
     if over_cap:
         log.warning("Günlük Places sınırı aşıldı (%d)", used)
 
-    result = None if over_cap else await places.search_stations(lat, lng, radius, operator)
-    if result is not None:
-        payload = {"stations": result, "fetched": int(time.time()), "stale": False}
+    found = None if over_cap else await places.search_stations(lat, lng, radius, operator)
+    if found is not None:
+        # Sayfalı aramada fazladan yapılan Google çağrıları da günlük sınıra sayılır
+        for _ in range(max(0, found["calls"] - 1)):
+            await cache.incr(f"cap:{datetime.now(timezone.utc).strftime('%Y%m%d')}", 90000)
+        result = found["stations"]
+        payload = {"stations": result, "capped": found["capped"], "fetched": int(time.time()), "stale": False}
         await cache.set_json(key, payload, config.STATIONS_CACHE_TTL if result else 600)
         if result:
             await cache.set_json(stale_key, payload, config.STATIONS_STALE_TTL)
+        await _attach_counts(payload, lat, lng, radius, operator)
         await _attach_reports(payload["stations"])
         return payload
 
@@ -183,6 +217,7 @@ async def _stations_payload(lat: float, lng: float, radius: int, operator: Optio
     if stale:
         stale["stale"] = True
         payload = _with_distance(stale, lat, lng)
+        await _attach_counts(payload, lat, lng, radius, operator)
         await _attach_reports(payload["stations"])
         return payload
     raise HTTPException(503, "İstasyon bilgisi şu an alınamıyor")
