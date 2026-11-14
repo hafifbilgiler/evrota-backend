@@ -11,6 +11,7 @@ EVrota backend
   GET  /stations/{id}/reports        son 6 saatin bildirim özeti
   GET  /news?limit=&category=&before= EV haberleri (kendi özetimiz + kaynak linki)
   GET  /vehicles/{id}/insight        AI araç değerlendirmesi (katalog verisine dayalı)
+  GET  /stations/{id}/pattern        doluluk deseni: "genelde ne zaman boş" (kendi topladığımız geçmiş)
   POST /agent/chat                   AI EV asistanı (Gemini + EVrota verisiyle fonksiyon çağrısı)
 """
 import json
@@ -27,12 +28,12 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel, Field
 
-from . import agent, auth, cache, config, insights, news, places
+from . import agent, auth, cache, config, insights, news, occupancy, places
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("evrota")
 
-VERSION = "0.5.1"
+VERSION = "0.6.0"
 
 
 @asynccontextmanager
@@ -205,6 +206,7 @@ async def _stations_payload(lat: float, lng: float, radius: int, operator: Optio
         for _ in range(max(0, found["calls"] - 1)):
             await cache.incr(f"cap:{datetime.now(timezone.utc).strftime('%Y%m%d')}", 90000)
         result = found["stations"]
+        await occupancy.record(result)
         payload = {"stations": result, "capped": found["capped"], "fetched": int(time.time()), "stale": False}
         await cache.set_json(key, payload, config.STATIONS_CACHE_TTL if result else 600)
         if result:
@@ -306,6 +308,17 @@ async def get_news(limit: int = 30, category: Optional[str] = None, before: Opti
             "id": v["id"], "name": f'{v["brand"]} {v["model"]}', "batteryKwh": v["batteryKwh"],
             "rangeWltp": v["rangeWltp"], "dcMaxKw": v["dcMaxKw"], "dc10to80Min": v["dc10to80Min"]}
     return {"items": items, "count": len(items)}
+
+
+@app.get("/stations/{station_id}/pattern")
+async def station_pattern(station_id: str, _: str = Depends(auth.require_device)):
+    """Doluluk deseni: haftanın günü x saat boşluk oranı, şimdiki tahmin, bugünün en boş saatleri."""
+    if not _ID_RE.match(station_id):
+        raise HTTPException(400, "Geçersiz istasyon")
+    res = await occupancy.pattern(station_id)
+    if res is None:
+        raise HTTPException(503, "Şu an kullanılamıyor")
+    return res
 
 
 # ── AI asistan ─────────────────────────────────────────────────

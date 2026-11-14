@@ -1,6 +1,6 @@
 {
- "version": 1,
- "updated": "2026-11-13",
+ "version": 2,
+ "updated": "2026-11-14",
  "vehicles": [
   {
    "id": "togg-t10x-v2-lr",
@@ -576,6 +576,406 @@
    "dcMaxKw": 320,
    "acMaxKw": 11.0,
    "dc10to80Min": 18,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "hyundai-ioniq6-63",
+   "brand": "Hyundai",
+   "model": "IONIQ 6 Advance 63 kWh",
+   "body": "Sedan",
+   "batteryKwh": 63.0,
+   "rangeWltp": 521,
+   "dcMaxKw": 220,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 18,
+   "isNew": true,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "hyundai-ioniq6-84",
+   "brand": "Hyundai",
+   "model": "IONIQ 6 Progressive 84 kWh",
+   "body": "Sedan",
+   "batteryKwh": 84.0,
+   "rangeWltp": 680,
+   "dcMaxKw": 260,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 18,
+   "isNew": true,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "hyundai-ioniq6-77",
+   "brand": "Hyundai",
+   "model": "IONIQ 6 77.4 kWh (2023-2025)",
+   "body": "Sedan",
+   "batteryKwh": 77.4,
+   "rangeWltp": 614,
+   "dcMaxKw": 233,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 18,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "hyundai-ioniq6-53",
+   "brand": "Hyundai",
+   "model": "IONIQ 6 53 kWh (2023-2025)",
+   "body": "Sedan",
+   "batteryKwh": 53.0,
+   "rangeWltp": 429,
+   "dcMaxKw": 175,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 18,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "hyundai-inster",
+   "brand": "Hyundai",
+   "model": "Inster 49 kWh",
+   "body": "Hatchback",
+   "batteryKwh": 49.0,
+   "rangeWltp": 370,
+   "dcMaxKw": 85,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 30,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "kgm-torres-evx",
+   "brand": "KG Mobility",
+   "model": "Torres EVX",
+   "body": "SUV",
+   "batteryKwh": 73.4,
+   "rangeWltp": 462,
+   "dcMaxKw": 120,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 37,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "mini-countryman-e",
+   "brand": "MINI",
+   "model": "Countryman E",
+   "body": "SUV",
+   "batteryKwh": 64.6,
+   "rangeWltp": 462,
+   "dcMaxKw": 130,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 29,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "citroen-ec3-aircross",
+   "brand": "Citroën",
+   "model": "ë-C3 Aircross",
+   "body": "SUV",
+   "batteryKwh": 44.0,
+   "rangeWltp": 300,
+   "dcMaxKw": 100,
+   "acMaxKw": 7.4,
+   "dc10to80Min": 26,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "citroen-ec3",
+   "brand": "Citroën",
+   "model": "ë-C3",
+   "body": "Hatchback",
+   "batteryKwh": 44.0,
+   "rangeWltp": 320,
+   "dcMaxKw": 100,
+   "acMaxKw": 7.4,
+   "dc10to80Min": 26,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "opel-frontera-e",
+   "brand": "Opel",
+   "model": "Frontera Electric",
+   "body": "SUV",
+   "batteryKwh": 44.0,
+   "rangeWltp": 305,
+   "dcMaxKw": 100,
+   "acMaxKw": 7.4,
+   "dc10to80Min": 26,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "bmw-ix3-50",
+   "brand": "BMW",
+   "model": "iX3 50 xDrive (Neue Klasse)",
+   "body": "SUV",
+   "batteryKwh": 108.7,
+   "rangeWltp": 805,
+   "dcMaxKw": 400,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 21,
+   "isNew": true,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "mercedes-cla-250",
+   "brand": "Mercedes-Benz",
+   "model": "CLA 250+ EQ",
+   "body": "Sedan",
+   "batteryKwh": 85.0,
+   "rangeWltp": 792,
+   "dcMaxKw": 320,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 22,
+   "isNew": true,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "volvo-ex40-er",
+   "brand": "Volvo",
+   "model": "EX40 Single Motor Extended Range",
+   "body": "SUV",
+   "batteryKwh": 79.0,
+   "rangeWltp": 572,
+   "dcMaxKw": 200,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 28,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "volvo-ex30-sr",
+   "brand": "Volvo",
+   "model": "EX30 Standart Menzil",
+   "body": "SUV",
+   "batteryKwh": 51.0,
+   "rangeWltp": 344,
+   "dcMaxKw": 134,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 26,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "kia-ev9",
+   "brand": "Kia",
+   "model": "EV9 99.8 kWh",
+   "body": "SUV",
+   "batteryKwh": 99.8,
+   "rangeWltp": 563,
+   "dcMaxKw": 210,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 24,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "kia-ev3-sr",
+   "brand": "Kia",
+   "model": "EV3 Standart Menzil",
+   "body": "SUV",
+   "batteryKwh": 58.3,
+   "rangeWltp": 436,
+   "dcMaxKw": 101,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 29,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "byd-atto2",
+   "brand": "BYD",
+   "model": "Atto 2",
+   "body": "SUV",
+   "batteryKwh": 45.1,
+   "rangeWltp": 312,
+   "dcMaxKw": 65,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 37,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "skoda-elroq-85",
+   "brand": "Skoda",
+   "model": "Elroq 85",
+   "body": "SUV",
+   "batteryKwh": 77.0,
+   "rangeWltp": 581,
+   "dcMaxKw": 175,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 28,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "vw-id7-pro",
+   "brand": "Volkswagen",
+   "model": "ID.7 Pro",
+   "body": "Sedan",
+   "batteryKwh": 77.0,
+   "rangeWltp": 621,
+   "dcMaxKw": 175,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 26,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "renault-scenic-87",
+   "brand": "Renault",
+   "model": "Scenic E-Tech 87 kWh",
+   "body": "SUV",
+   "batteryKwh": 87.0,
+   "rangeWltp": 625,
+   "dcMaxKw": 150,
+   "acMaxKw": 22.0,
+   "dc10to80Min": 37,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "peugeot-e3008",
+   "brand": "Peugeot",
+   "model": "e-3008 73 kWh",
+   "body": "SUV",
+   "batteryKwh": 73.0,
+   "rangeWltp": 527,
+   "dcMaxKw": 160,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 30,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "jeep-avenger",
+   "brand": "Jeep",
+   "model": "Avenger Elektrik",
+   "body": "SUV",
+   "batteryKwh": 51.0,
+   "rangeWltp": 400,
+   "dcMaxKw": 100,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 30,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "dacia-spring",
+   "brand": "Dacia",
+   "model": "Spring Electric",
+   "body": "Hatchback",
+   "batteryKwh": 26.8,
+   "rangeWltp": 225,
+   "dcMaxKw": 30,
+   "acMaxKw": 7.0,
+   "dc10to80Min": 45,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "leapmotor-c10",
+   "brand": "Leapmotor",
+   "model": "C10",
+   "body": "SUV",
+   "batteryKwh": 69.9,
+   "rangeWltp": 420,
+   "dcMaxKw": 84,
+   "acMaxKw": 6.6,
+   "dc10to80Min": 30,
+   "isNew": false,
+   "connectors": [
+    "CCS2",
+    "Type 2"
+   ]
+  },
+  {
+   "id": "polestar-2-lr",
+   "brand": "Polestar",
+   "model": "2 Long Range Single Motor",
+   "body": "Sedan",
+   "batteryKwh": 79.0,
+   "rangeWltp": 659,
+   "dcMaxKw": 205,
+   "acMaxKw": 11.0,
+   "dc10to80Min": 28,
    "isNew": false,
    "connectors": [
     "CCS2",

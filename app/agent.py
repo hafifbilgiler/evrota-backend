@@ -20,7 +20,7 @@ from typing import Awaitable, Callable, Optional
 
 import httpx
 
-from . import cache, config, news, places
+from . import cache, config, news, occupancy, places
 
 log = logging.getLogger("evrota.agent")
 
@@ -121,6 +121,14 @@ async def _run_tool(name: str, args: dict, ctx: dict, stations_fn) -> dict:
             out.append({"ad": s["name"], "firma": s.get("operator"), "mesafe_m": s["distance"],
                         "max_kw": s.get("maxKw"), "bos_soket": s.get("availableCount"), "toplam": s.get("totalCount"),
                         "soketler": [f'{c["type"]} {c["kw"]}kW x{c["count"]}' for c in s.get("connectors", [])][:4]})
+        # Doluluk geçmişi: "bu saatte genelde ne kadar boş" (yeterli veri varsa)
+        by_name = {s["name"]: s["id"] for s in payload["stations"]}
+        for o in out[:8]:
+            sid = by_name.get(o["ad"])
+            pat = await occupancy.pattern(sid) if sid else None
+            if pat and pat.get("enough") and pat.get("now") is not None:
+                o["bu_saatte_genelde_bos_orani"] = pat["now"]
+                o["bugun_en_bos_saatler"] = pat["bestHours"]
         return {"istasyonlar": out[:8], "toplam_bulunan": len(out), "yaricap_km": r}
     if name == "arac_ara":
         res = cat
