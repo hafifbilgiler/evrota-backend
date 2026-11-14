@@ -5,11 +5,13 @@ EVrota backend
   --- aşağıdakiler Authorization: Bearer <token> ister ---
   GET  /vehicles                     araç kataloğu (uygulamadaki vehicles.json ile aynı biçim)
   GET  /prices                       elektrik / akaryakıt / şarj fiyatları
-  GET  /stations?lat=&lng=&radius=   yakındaki şarj istasyonları + anlık doluluk (Google Places)
+  GET  /stations?lat=&lng=&radius=&operator=  yakındaki şarj istasyonları + anlık doluluk (Google Places)
+  GET  /operators                    filtrede gösterilecek operatör listesi
   POST /stations/{id}/reports        kullanıcı bildirimi: çalışıyor / kuyruk / arızalı / kapalı
   GET  /stations/{id}/reports        son 6 saatin bildirim özeti
   GET  /news?limit=&category=&before= EV haberleri (kendi özetimiz + kaynak linki)
   GET  /vehicles/{id}/insight        AI araç değerlendirmesi (katalog verisine dayalı)
+  POST /agent/chat                   AI EV asistanı (Gemini + EVrota verisiyle fonksiyon çağrısı)
 """
 import json
 import logging
@@ -25,12 +27,12 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel, Field
 
-from . import auth, cache, config, insights, news, places
+from . import agent, auth, cache, config, insights, news, places
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("evrota")
 
-VERSION = "0.4.0"
+VERSION = "0.5.0"
 
 
 @asynccontextmanager
@@ -136,12 +138,25 @@ async def _attach_reports(stations: list) -> None:
         s["reports"] = await _report_summary(s["id"])
 
 
+@app.get("/operators")
+async def operators(_: str = Depends(auth.require_device)):
+    return {"operators": places.OPERATOR_NAMES}
+
+
 @app.get("/stations")
-async def stations(lat: float, lng: float, radius: int = 5000, _: str = Depends(auth.require_device)):
+async def stations(lat: float, lng: float, radius: int = 5000, operator: Optional[str] = None,
+                   _: str = Depends(auth.require_device)):
     if not (-90 <= lat <= 90 and -180 <= lng <= 180):
         raise HTTPException(400, "Geçersiz konum")
+    if operator and operator not in places.OPERATOR_NAMES:
+        raise HTTPException(400, "Geçersiz operatör")
+    return await _stations_payload(lat, lng, radius, operator)
+
+
+async def _stations_payload(lat: float, lng: float, radius: int, operator: Optional[str]) -> dict:
+    """/stations ve AI asistanı aynı önbelleği ve günlük Places sınırını paylaşır."""
     radius = max(1000, min(radius, 30000))
-    cell = f"{round(lat, 2)}:{round(lng, 2)}:{radius}"
+    cell = f"{round(lat, 2)}:{round(lng, 2)}:{radius}:{operator or '*'}"
     key, stale_key = f"st:{cell}", f"st_stale:{cell}"
 
     cached = await cache.get_json(key)
@@ -155,7 +170,7 @@ async def stations(lat: float, lng: float, radius: int = 5000, _: str = Depends(
     if over_cap:
         log.warning("Günlük Places sınırı aşıldı (%d)", used)
 
-    result = None if over_cap else await places.search_stations(lat, lng, radius)
+    result = None if over_cap else await places.search_stations(lat, lng, radius, operator)
     if result is not None:
         payload = {"stations": result, "fetched": int(time.time()), "stale": False}
         await cache.set_json(key, payload, config.STATIONS_CACHE_TTL if result else 600)
@@ -256,6 +271,25 @@ async def get_news(limit: int = 30, category: Optional[str] = None, before: Opti
             "id": v["id"], "name": f'{v["brand"]} {v["model"]}', "batteryKwh": v["batteryKwh"],
             "rangeWltp": v["rangeWltp"], "dcMaxKw": v["dcMaxKw"], "dc10to80Min": v["dc10to80Min"]}
     return {"items": items, "count": len(items)}
+
+
+# ── AI asistan ─────────────────────────────────────────────────
+class ChatMsg(BaseModel):
+    role: str = Field(pattern="^(user|assistant)$")
+    text: str = Field(max_length=4000)
+
+
+class ChatIn(BaseModel):
+    messages: list[ChatMsg] = Field(max_length=30)
+    lat: Optional[float] = Field(default=None, ge=-90, le=90)
+    lng: Optional[float] = Field(default=None, ge=-180, le=180)
+    vehicleId: Optional[str] = Field(default=None, max_length=80)
+
+
+@app.post("/agent/chat")
+async def agent_chat(body: ChatIn, device: str = Depends(auth.require_device)):
+    ctx = {"lat": body.lat if body.lng is not None else None, "lng": body.lng, "vehicleId": body.vehicleId}
+    return await agent.chat(device, [m.model_dump() for m in body.messages], ctx, _stations_payload)
 
 
 @app.get("/vehicles/{vehicle_id}/insight")

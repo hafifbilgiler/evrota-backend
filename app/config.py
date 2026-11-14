@@ -29,3 +29,6 @@ NEWS_FEEDS_FILE = os.getenv("NEWS_FEEDS_FILE", os.path.join(DATA_DIR, "news_feed
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 NEWS_MAX_PER_RUN = int(os.getenv("NEWS_MAX_PER_RUN", "60"))
+# AI asistan (POST /agent/chat)
+AGENT_DAILY_LIMIT = int(os.getenv("AGENT_DAILY_LIMIT", "30"))     # cihaz başına günlük mesaj
+AGENT_MAX_CHARS = int(os.getenv("AGENT_MAX_CHARS", "800"))        # mesaj başına karakter

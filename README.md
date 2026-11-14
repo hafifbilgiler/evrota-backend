@@ -24,10 +24,12 @@ namespace'inde (`evrota`) çalışır; başka hiçbir servisle kaynak paylaşmaz
 | `POST /auth/device` | Cihaz token'ı (açık) |
 | `GET /vehicles` | Araç kataloğu (`data/vehicles.json`, uygulamadaki dosyayla aynı biçim) |
 | `GET /prices` | Elektrik / akaryakıt / şarj fiyatları (ConfigMap'ten) |
-| `GET /stations?lat=&lng=&radius=` | Yakındaki şarj istasyonları, soketler, anlık doluluk + kullanıcı bildirim özeti |
+| `GET /stations?lat=&lng=&radius=&operator=` | Yakındaki şarj istasyonları, soketler, anlık doluluk, operatör (ZES, Eşarj, Trugo…) + kullanıcı bildirim özeti |
+| `GET /operators` | Firma filtresi için operatör listesi |
 | `POST /stations/{id}/reports` | Bildirim: `Calisiyor`, `Kuyruk`, `Arizali`, `Kapali` |
 | `GET /stations/{id}/reports` | Son 6 saatin bildirim özeti |
 | `GET /news?limit=&category=&before=` | EV haberleri: özet, "neden önemli", öne çıkan bilgiler, katalogdaki araç + kaynak linki |
+| `POST /agent/chat` | AI EV asistanı: Gemini fonksiyon çağrısıyla istasyon, katalog, kıyas, yolculuk ve maliyet verisini kullanır; cihaz başına günlük sınır (`AGENT_DAILY_LIMIT`) |
 | `GET /vehicles/{id}/insight` | AI araç değerlendirmesi (artılar, eksiler, kime uygun, rakipler); katalog verisine dayalı, 30 gün önbellek |
 
 İstasyon verisi Google Places API (New) `evChargeOptions` alanından gelir. Maliyet için

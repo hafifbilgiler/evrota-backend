@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: api
-          image: docker.io/hafifbilgiler/evrota-backend:0.4.0
+          image: docker.io/hafifbilgiler/evrota-backend:0.5.0
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
@@ -32,6 +32,8 @@ spec:
             - name: GEMINI_API_KEY
               valueFrom:
                 secretKeyRef: { name: evrota-secrets, key: GEMINI_API_KEY, optional: true }
+            - name: AGENT_DAILY_LIMIT        # AI asistan: cihaz başına günlük mesaj
+              value: "30"
           volumeMounts:
             - name: prices
               mountPath: /config
