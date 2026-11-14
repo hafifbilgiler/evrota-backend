@@ -31,9 +31,10 @@ from pydantic import BaseModel, Field
 from . import agent, auth, cache, config, insights, news, occupancy, places
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.getLogger("httpx").setLevel(logging.WARNING)   # istek URL'lerini (anahtar vb.) loglama
 log = logging.getLogger("evrota")
 
-VERSION = "0.6.0"
+VERSION = "0.6.1"
 
 
 @asynccontextmanager

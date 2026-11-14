@@ -170,7 +170,7 @@ async def _classify_with_gemini(items: list) -> Optional[list]:
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{config.GEMINI_MODEL}:generateContent"
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=5.0)) as client:
-            r = await client.post(url, params={"key": config.GEMINI_API_KEY}, json=body)
+            r = await client.post(url, headers={"x-goog-api-key": config.GEMINI_API_KEY}, json=body)
         if r.status_code != 200:
             log.warning("Gemini HTTP %s: %s", r.status_code, r.text[:300])
             return None

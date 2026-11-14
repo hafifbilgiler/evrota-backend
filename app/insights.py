@@ -73,7 +73,7 @@ async def get_insight(vehicle_id: str) -> Optional[dict]:
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{config.GEMINI_MODEL}:generateContent"
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(45.0, connect=5.0)) as client:
-            r = await client.post(url, params={"key": config.GEMINI_API_KEY}, json=body)
+            r = await client.post(url, headers={"x-goog-api-key": config.GEMINI_API_KEY}, json=body)
         if r.status_code != 200:
             log.warning("Gemini HTTP %s: %s", r.status_code, r.text[:200])
             return {"available": False, "reason": "AI değerlendirmesi şu an hazırlanamadı"}

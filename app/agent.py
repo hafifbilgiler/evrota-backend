@@ -177,7 +177,7 @@ async def chat(device: str, messages: list, ctx: dict,
     if not config.GEMINI_API_KEY:
         return {"reply": "Asistan şu an kullanılamıyor.", "available": False}
     day = time.strftime("%Y%m%d", time.gmtime())
-    used = await cache.incr(f"agent:d:{device}:{day}", 90000)
+    used = await cache.incr(f"agent:d:{device}:{day}", 90000)   # (Gemini hatası olsa da sayılır: kötüye kullanım koruması)
     if used > config.AGENT_DAILY_LIMIT:
         return {"reply": f"Bugünkü asistan mesaj hakkın doldu ({config.AGENT_DAILY_LIMIT}). Yarın tekrar görüşelim!",
                 "available": True, "limited": True, "remaining": 0}
@@ -204,12 +204,16 @@ async def chat(device: str, messages: list, ctx: dict,
                     "generationConfig": {"temperature": 0.4, "maxOutputTokens": 1024,
                                          "thinkingConfig": {"thinkingBudget": 0}}}
             try:
-                r = await client.post(url, params={"key": config.GEMINI_API_KEY}, json=body)
+                r = await client.post(url, headers={"x-goog-api-key": config.GEMINI_API_KEY}, json=body)
             except httpx.HTTPError as e:
                 log.warning("Gemini bağlantı: %s", e)
                 return {"reply": "Asistana şu an ulaşılamıyor, birazdan tekrar dene.", "available": True}
             if r.status_code != 200:
                 log.warning("Gemini HTTP %s: %s", r.status_code, r.text[:300])
+                if r.status_code in (402, 403):
+                    return {"reply": "Asistan şu an bakımda, kısa süre içinde tekrar açılacak.", "available": False}
+                if r.status_code == 429:
+                    return {"reply": "Asistan şu an çok yoğun, bir dakika sonra tekrar dene.", "available": True}
                 return {"reply": "Asistan şu an yanıt veremedi, birazdan tekrar dene.", "available": True}
             cand = (r.json().get("candidates") or [{}])[0]
             parts = (cand.get("content") or {}).get("parts") or []
