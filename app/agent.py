@@ -35,6 +35,10 @@ Kurallar:
 - Konum gerekiyorsa ve verilmediyse kullanıcıdan uygulamada konum iznini açmasını iste.
 - Elektrikli araçlar, şarj, batarya bakımı, yolculuk planı dışındaki konularda kibarca konuya dön.
 - Güvenlikle ilgili konularda (ör. arızalı soket, yanık kablo) önce güvenliği öner.
+- İstasyon önerdiğinde uygulama, cevabının altında o istasyonları "Yol tarifi" ve "Haritada gör" düğmeli
+  kartlar olarak OTOMATİK gösterir. Bu yüzden "link veremiyorum" deme; "aşağıdaki karta dokunarak yol
+  tarifini başlatabilirsin" de. Uygulamada olmayan ekranlardan veya düğmelerden bahsetme.
+- İstasyon adını yazarken firma adını ve mesafeyi de yaz (ör. "Eşarj · 350 m, 2 boş soket").
 Kullanıcı bağlamı: {ctx}"""
 
 TOOLS = [{"functionDeclarations": [
@@ -118,7 +122,12 @@ async def _run_tool(name: str, args: dict, ctx: dict, stations_fn) -> dict:
                 continue
             if (s.get("maxKw") or 0) < int(args.get("min_kw") or 0):
                 continue
-            out.append({"ad": s["name"], "firma": s.get("operator"), "mesafe_m": s["distance"],
+            # Uygulamada tıklanabilir kart olarak gösterilecek yerler (model bunları "Yol tarifi" kartıyla verir)
+            ctx.setdefault("_places", {})[s["id"]] = {
+                "id": s["id"], "name": s["name"], "operator": s.get("operator"), "lat": s["lat"], "lng": s["lng"],
+                "distance": s["distance"], "available": s.get("availableCount"), "total": s.get("totalCount"),
+                "maxKw": s.get("maxKw"), "address": s.get("address"), "mapsUri": s.get("mapsUri")}
+            out.append({"ad": s["name"], "firma": s.get("operator"), "mesafe_m": s["distance"], "adres": s.get("address"),
                         "max_kw": s.get("maxKw"), "bos_soket": s.get("availableCount"), "toplam": s.get("totalCount"),
                         "soketler": [f'{c["type"]} {c["kw"]}kW x{c["count"]}' for c in s.get("connectors", [])][:4]})
         # Doluluk geçmişi: "bu saatte genelde ne kadar boş" (yeterli veri varsa)
@@ -244,6 +253,19 @@ async def _openai_compat(client, system: str, history: list, ctx: dict, stations
     return ""
 
 
+def _places_for(reply: str, ctx: dict) -> list:
+    """Cevapta adı/firması geçen istasyonlar (yoksa en yakın 3) — uygulamada tıklanabilir kart olur."""
+    found = list((ctx.get("_places") or {}).values())
+    if not found:
+        return []
+    low = (reply or "").lower()
+    named = [p for p in found if p["name"].lower() in low or
+             (p.get("operator") and p["operator"] != "Diğer" and p["operator"].lower() in low)]
+    pick = named or found
+    pick.sort(key=lambda p: p["distance"])
+    return pick[:3]
+
+
 def _providers() -> list:
     """AGENT_PROVIDER sırası: ilk çalışan kullanılır, hata olursa sıradakine geçilir."""
     avail = {"gemini": (bool(config.GEMINI_API_KEY), _gemini),
@@ -288,6 +310,6 @@ async def chat(device: str, messages: list, ctx: dict,
                 log.exception("Asistan %s hatası: %s", name, e)
                 continue
             return {"reply": text or "Bunu yanıtlayamadım, farklı sorar mısın?", "available": True,
-                    "provider": name, "tools": used_tools,
+                    "provider": name, "tools": used_tools, "places": _places_for(text, ctx),
                     "remaining": max(0, config.AGENT_DAILY_LIMIT - used)}
     return {"reply": "Asistan şu an bakımda, kısa süre içinde tekrar açılacak.", "available": False}

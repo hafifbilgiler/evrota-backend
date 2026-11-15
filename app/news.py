@@ -159,6 +159,23 @@ Haberler:
 {items}"""
 
 
+_CAT_RULES = [
+    ("mevzuat", re.compile(r"ötv|ÖTV|vergi|yönetmelik|epdk|EPDK|kanun|teşvik|tebliğ|düzenleme|bakanlık|resmi gazete", re.I)),
+    ("sarj_agi", re.compile(r"şarj (istasyon|ağı|noktası|ünitesi)|şarj fiyat|kwh fiyat|\bzes\b|eşarj|esarj|trugo|voltrun|sharz|supercharger|şarj operatör", re.I)),
+    ("fiyat", re.compile(r"fiyat|zam|indirim|kampanya|\bTL\b|liradan|lira", re.I)),
+    ("yeni_model", re.compile(r"tanıtıldı|tanıttı|lansman|satışa (sunuldu|çıktı)|türkiye'ye geldi|yeni (model|nesil)|ön sipariş|görücüye", re.I)),
+    ("teknoloji", re.compile(r"batarya|pil|katı hal|solid.state|yazılım|otonom|menzil rekor|hızlı şarj teknolojisi|800 ?v", re.I)),
+]
+
+
+def _keyword_category(text: str) -> str:
+    """AI yokken kaba kategori (sıra önemli: mevzuat > şarj ağı > fiyat > yeni model > teknoloji)."""
+    for cat, rx in _CAT_RULES:
+        if rx.search(text or ""):
+            return cat
+    return "genel"
+
+
 async def _classify_with_gemini(items: list) -> Optional[list]:
     if not config.GEMINI_API_KEY or not items:
         return None
@@ -236,7 +253,8 @@ async def run_once() -> dict:
                     continue
                 item = {"id": it["id"], "url": it["url"], "source": it["source"], "published": it["published"],
                         "title": it["title"][:120], "summary": "", "whyImportant": "", "highlights": [],
-                        "category": "genel",
+                        "category": _keyword_category(it["title"] + " " + it["snippet"]),
+                        "snippet": it["snippet"][:300],   # AI açılınca yeniden işlemek için
                         "brand": "", "model": "", "priceTl": None, "aiSummary": False}
             item["vehicleId"] = match_vehicle(item.get("brand", ""), item.get("model", ""), item["title"])
             await r.set(NEWS_ITEM + item["id"], json.dumps(item, ensure_ascii=False), ex=KEEP_SECONDS)
@@ -248,12 +266,65 @@ async def run_once() -> dict:
                     "title": item["title"], "url": item["url"], "at": int(time.time())}, ensure_ascii=False))
                 drafts += 1
     await r.zremrangebyscore(NEWS_KEY, 0, time.time() - KEEP_SECONDS)
+    reprocessed = await _reprocess_without_ai(r)
     await r.ltrim(DRAFT_KEY, 0, 499)
     stats = {"feeds": len(feeds), "fetched": len(raw), "new": len(fresh), "stored": stored, "drafts": drafts,
-             "ai": bool(config.GEMINI_API_KEY)}
+             "ai": bool(config.GEMINI_API_KEY), "reprocessed": reprocessed}
     log.info("Haber taraması: %s", stats)
     await r.set("news:last_run", json.dumps({**stats, "at": int(time.time())}))
     return stats
+
+
+async def _reprocess_without_ai(r, limit: int = 20) -> int:
+    """
+    Gemini kapalıyken (kredi bitti, model hatası) AI özeti olmadan kaydedilen son haberleri
+    yeniden Gemini'ye gönderir: özet, kategori, öne çıkanlar dolar; EV ile ilgisizse silinir.
+    Her çalışmada en fazla 20 haber (tek Gemini çağrısı).
+    """
+    if not config.GEMINI_API_KEY:
+        return 0
+    ids = await r.zrevrange(NEWS_KEY, 0, 200)
+    todo = []
+    for nid in ids:
+        raw = await r.get(NEWS_ITEM + nid)
+        if not raw:
+            continue
+        item = json.loads(raw)
+        if not item.get("aiSummary"):
+            todo.append(item)
+        if len(todo) >= limit:
+            break
+    if not todo:
+        return 0
+    verdicts = await _classify_with_gemini(
+        [{"source": x["source"], "title": x["title"], "snippet": x.get("snippet", "")} for x in todo])
+    if not verdicts:
+        return 0
+    done = 0
+    for j, item in enumerate(todo):
+        v = next((x for x in verdicts if isinstance(x, dict) and x.get("i") == j), None)
+        if v is None:
+            continue
+        if not v.get("ev"):
+            await r.delete(NEWS_ITEM + item["id"])
+            await r.zrem(NEWS_KEY, item["id"])
+            continue
+        item.update({
+            "title": (v.get("baslik") or item["title"])[:120],
+            "summary": (v.get("ozet") or "")[:380],
+            "whyImportant": (v.get("neden_onemli") or "")[:180],
+            "highlights": [str(h)[:60] for h in (v.get("one_cikanlar") or []) if h][:4],
+            "category": v.get("kategori") if v.get("kategori") in CATEGORIES else item.get("category", "genel"),
+            "brand": (v.get("marka") or "")[:40], "model": (v.get("model") or "")[:60],
+            "priceTl": v.get("fiyat_tl") if isinstance(v.get("fiyat_tl"), (int, float)) else None,
+            "aiSummary": True,
+        })
+        item.pop("snippet", None)
+        item["vehicleId"] = match_vehicle(item["brand"], item["model"], item["title"])
+        await r.set(NEWS_ITEM + item["id"], json.dumps(item, ensure_ascii=False), ex=KEEP_SECONDS)
+        done += 1
+    log.info("AI'sız %d haber yeniden işlendi", done)
+    return done
 
 
 async def latest(limit: int = 50, category: Optional[str] = None, before: Optional[int] = None) -> list:
