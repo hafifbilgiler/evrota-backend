@@ -165,8 +165,7 @@ async def _classify_with_gemini(items: list) -> Optional[list]:
     lines = "\n".join(f'{i}. [{it["source"]}] {it["title"]} — {it["snippet"][:300]}' for i, it in enumerate(items))
     body = {
         "contents": [{"parts": [{"text": GEMINI_PROMPT.format(items=lines)}]}],
-        "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json", "maxOutputTokens": 8192,
-                             "thinkingConfig": {"thinkingBudget": 0}}   # düşünme kapalı: maliyet,
+        "generationConfig": config.gemini_config(config.NEWS_GEMINI_MODEL, 0.2, 8192, json_mode=True),
     }
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{config.NEWS_GEMINI_MODEL}:generateContent"
     try:

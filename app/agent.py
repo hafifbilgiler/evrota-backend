@@ -182,8 +182,7 @@ async def _gemini(client, system: str, history: list, ctx: dict, stations_fn, us
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{config.GEMINI_MODEL}:generateContent"
     for _ in range(5):
         body = {"systemInstruction": {"parts": [{"text": system}]}, "contents": contents, "tools": TOOLS,
-                "generationConfig": {"temperature": 0.4, "maxOutputTokens": 1024,
-                                     "thinkingConfig": {"thinkingBudget": 0}}}
+                "generationConfig": config.gemini_config(config.GEMINI_MODEL, 0.4, 1024)}
         try:
             r = await client.post(url, headers={"x-goog-api-key": config.GEMINI_API_KEY}, json=body)
         except httpx.HTTPError as e:

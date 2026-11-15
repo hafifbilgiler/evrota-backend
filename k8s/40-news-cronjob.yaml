@@ -18,11 +18,15 @@ spec:
           restartPolicy: Never
           containers:
             - name: news
-              image: docker.io/hafifbilgiler/evrota-backend:0.6.3
+              image: docker.io/hafifbilgiler/evrota-backend:0.6.4
               command: ["python", "-m", "app.news_job"]
               env:
                 - name: REDIS_URL
                   value: redis://evrota-redis:6379/0
+                - name: NEWS_GEMINI_MODEL      # haber özetleme modeli
+                  value: "gemini-3.8-flash"
+                - name: GEMINI_THINKING_LEVEL
+                  value: "minimal"
                 - name: NEWS_FEEDS_FILE
                   value: /config/news_feeds.json
                 - name: GEMINI_API_KEY

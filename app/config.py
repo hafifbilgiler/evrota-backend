@@ -27,14 +27,32 @@ MAX_BODY_BYTES = int(os.getenv("MAX_BODY_BYTES", "16384"))
 # ── Haberler ──
 NEWS_FEEDS_FILE = os.getenv("NEWS_FEEDS_FILE", os.path.join(DATA_DIR, "news_feeds.json"))
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-NEWS_GEMINI_MODEL = os.getenv("NEWS_GEMINI_MODEL", "gemini-2.5-flash-lite")   # haber özetleme: ucuz model
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")            # asistan + araç değerlendirmesi
+NEWS_GEMINI_MODEL = os.getenv("NEWS_GEMINI_MODEL", GEMINI_MODEL)          # haber özetleme (ucuz model varsa env ile)
+GEMINI_THINKING_LEVEL = os.getenv("GEMINI_THINKING_LEVEL", "low")         # Gemini 3: minimal | low | medium | high
+
+
+def gemini_config(model: str, temperature: float, max_tokens: int, json_mode: bool = False) -> dict:
+    """
+    Model sürümüne göre generationConfig.
+    Gemini 2.x: thinkingBudget=0 (düşünme kapalı). Gemini 3+: thinkingLevel (env) ve
+    sıcaklık varsayılan bırakılır (Google, Gemini 3'te sıcaklığı düşürmemeyi öneriyor).
+    """
+    cfg: dict = {"maxOutputTokens": max_tokens}
+    if json_mode:
+        cfg["responseMimeType"] = "application/json"
+    if model.startswith("gemini-2"):
+        cfg["temperature"] = temperature
+        cfg["thinkingConfig"] = {"thinkingBudget": 0}
+    else:
+        cfg["thinkingConfig"] = {"thinkingLevel": GEMINI_THINKING_LEVEL}
+    return cfg
 NEWS_MAX_PER_RUN = int(os.getenv("NEWS_MAX_PER_RUN", "60"))
 # AI asistan (POST /agent/chat)
 AGENT_DAILY_LIMIT = int(os.getenv("AGENT_DAILY_LIMIT", "30"))     # cihaz başına günlük mesaj
 AGENT_MAX_CHARS = int(os.getenv("AGENT_MAX_CHARS", "800"))        # mesaj başına karakter
 # Asistan sağlayıcı sırası: ilk çalışan kullanılır, hata/kredi bitti olursa sıradakine geçer
-AGENT_PROVIDER = os.getenv("AGENT_PROVIDER", "gemini,deepinfra")
+AGENT_PROVIDER = os.getenv("AGENT_PROVIDER", "gemini")   # "gemini" | "deepinfra" | yedekli: "gemini,deepinfra"
 DEEPINFRA_API_KEY = os.getenv("DEEPINFRA_API_KEY", "")
 DEEPINFRA_BASE_URL = os.getenv("DEEPINFRA_BASE_URL", "https://api.deepinfra.com/v1/openai")
 DEEPINFRA_MODEL = os.getenv("DEEPINFRA_MODEL", "deepseek-ai/DeepSeek-V4-Flash-0731")

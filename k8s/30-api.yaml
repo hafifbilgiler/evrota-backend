@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: api
-          image: docker.io/hafifbilgiler/evrota-backend:0.6.3
+          image: docker.io/hafifbilgiler/evrota-backend:0.6.4
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
@@ -34,8 +34,12 @@ spec:
                 secretKeyRef: { name: evrota-secrets, key: GEMINI_API_KEY, optional: true }
             - name: AGENT_DAILY_LIMIT        # AI asistan: cihaz başına günlük mesaj
               value: "30"
-            - name: AGENT_PROVIDER           # sıra: ilk çalışan kullanılır (ör. "deepinfra,gemini")
-              value: "gemini,deepinfra"
+            - name: AGENT_PROVIDER           # "gemini" | "deepinfra" | yedekli: "gemini,deepinfra"
+              value: "gemini"
+            - name: GEMINI_MODEL             # asistan + araç değerlendirmesi
+              value: "gemini-3.8-flash"
+            - name: GEMINI_THINKING_LEVEL    # minimal | low | medium | high (düşük = ucuz, hızlı)
+              value: "low"
             - name: DEEPINFRA_MODEL
               value: "deepseek-ai/DeepSeek-V4-Flash-0731"
             - name: DEEPINFRA_API_KEY
