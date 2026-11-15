@@ -54,6 +54,8 @@ DB_PORT = int(os.getenv("DB_PORT", "5432"))
 DB_USER = os.getenv("DB_USER", "evrota")
 DB_NAME = os.getenv("DB_NAME", "evrota")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "")
+# Google ile giriş: Google Cloud'daki "Web application" OAuth istemci kimliği (gizli değil)
+GOOGLE_WEB_CLIENT_ID = os.getenv("GOOGLE_WEB_CLIENT_ID", "")
 PROFILE_ANALYSIS_DAILY = int(os.getenv("PROFILE_ANALYSIS_DAILY", "3"))   # cihaz başına günlük AI profil analizi
 
 # AI asistan (POST /agent/chat)

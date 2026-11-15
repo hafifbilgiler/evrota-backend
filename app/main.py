@@ -12,6 +12,10 @@ EVrota backend
   GET  /news?limit=&category=&before= EV haberleri (kendi özetimiz + kaynak linki)
   GET  /vehicles/{id}/insight        AI araç değerlendirmesi (katalog verisine dayalı)
   GET  /stations/{id}/pattern        doluluk deseni: "genelde ne zaman boş" (kendi topladığımız geçmiş)
+  POST /auth/google                 Google ile giriş (ID token doğrulanır, hesaba bağlı token + yenileme anahtarı)
+  POST /auth/logout                 çıkış
+  GET  /me · DELETE /me/account     hesap bilgisi · hesabı ve tüm veriyi silme
+  GET/PUT /me/data/{favorites|settings}  favori istasyonlar, ayarlar
   GET/PUT /me/profile               kullanıcı profili (araç, ev elektrik fiyatı, alışkanlıklar) — PostgreSQL
   GET/PUT /me/sessions              şarj kayıtları senkronu
   GET  /me/analysis                 AI profil analizi (tasarruf, batarya, saat önerileri)
@@ -31,13 +35,13 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel, Field
 
-from . import agent, auth, cache, config, db, insights, news, occupancy, places, profile_ai
+from . import agent, auth, cache, config, db, google_auth, insights, news, occupancy, places, profile_ai
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)   # istek URL'lerini (anahtar vb.) loglama
 log = logging.getLogger("evrota")
 
-VERSION = "0.8.0"
+VERSION = "0.9.0"
 
 
 @asynccontextmanager
@@ -81,11 +85,62 @@ async def unhandled(_: Request, exc: Exception):
 class DeviceIn(BaseModel):
     deviceId: str = Field(max_length=64)
     integrityToken: Optional[str] = Field(default=None, max_length=8192)
+    refreshToken: Optional[str] = Field(default=None, max_length=200)   # girişli kullanıcı
 
 
 @app.post("/auth/device")
 async def auth_device(body: DeviceIn, request: Request):
-    return await auth.register_device(body.deviceId, request, body.integrityToken)
+    return await auth.register_device(body.deviceId, request, body.integrityToken, body.refreshToken)
+
+
+class GoogleIn(BaseModel):
+    idToken: str = Field(max_length=8192)
+
+
+@app.post("/auth/google")
+async def auth_google(body: GoogleIn, device: str = Depends(auth.require_device)):
+    """
+    Google ile giriş. Uygulama mevcut cihaz token'ıyla çağırır; Google ID token'ı doğrulanır,
+    hesap açılır/bulunur, cihazdaki veri hesaba taşınır, hesaba bağlı token + yenileme anahtarı döner.
+    """
+    if not await db.ensure():
+        raise HTTPException(503, "Giriş şu an yapılamıyor")
+    g = await google_auth.verify(body.idToken)
+    user = await db.upsert_user(g)
+    moved = await db.migrate_device_to_user(device, user["id"])
+    refresh = await db.new_refresh(user["id"], device)
+    return {**auth.issue_token(device, user["id"]), "refreshToken": refresh, "user": user, "moved": moved}
+
+
+class LogoutIn(BaseModel):
+    refreshToken: Optional[str] = Field(default=None, max_length=200)
+
+
+@app.post("/auth/logout")
+async def auth_logout(body: LogoutIn, device: str = Depends(auth.require_device)):
+    """Çıkış: yenileme anahtarı iptal edilir, cihaz token'ı döner (veri hesapta kalır)."""
+    if body.refreshToken and await db.ensure():
+        await db.revoke_refresh(body.refreshToken)
+    return auth.issue_token(device)
+
+
+@app.get("/me")
+async def me(uid: str = Depends(auth.require_user)):
+    if not await db.ensure():
+        raise HTTPException(503, "Şu an kullanılamıyor")
+    user = await db.get_user(uid)
+    if not user:
+        raise HTTPException(401, "Hesap bulunamadı")
+    return {"user": user}
+
+
+@app.delete("/me/account")
+async def delete_account(uid: str = Depends(auth.require_user)):
+    """Hesabı ve tüm verisini kalıcı olarak siler."""
+    if not await db.ensure():
+        raise HTTPException(503, "Şu an kullanılamıyor")
+    await db.delete_user(uid)
+    return {"ok": True}
 
 
 def _load_json(path: str) -> Optional[dict]:
@@ -355,28 +410,28 @@ class SessionIn(BaseModel):
     chargedAt: int = Field(gt=0)
 
 
-def _need_db():
-    if not db.ready():
+async def _need_db():
+    if not await db.ensure():
         raise HTTPException(503, "Profil şu an kullanılamıyor")
 
 
 @app.get("/me/profile")
-async def get_my_profile(device: str = Depends(auth.require_device)):
-    _need_db()
+async def get_my_profile(device: str = Depends(auth.require_owner)):
+    await _need_db()
     return {"profile": await db.get_profile(device)}
 
 
 @app.put("/me/profile")
-async def put_my_profile(body: ProfileIn, device: str = Depends(auth.require_device)):
-    _need_db()
+async def put_my_profile(body: ProfileIn, device: str = Depends(auth.require_owner)):
+    await _need_db()
     await db.put_profile(device, body.model_dump())
     return {"ok": True}
 
 
 @app.put("/me/sessions")
-async def put_my_sessions(body: list[SessionIn], device: str = Depends(auth.require_device)):
+async def put_my_sessions(body: list[SessionIn], device: str = Depends(auth.require_owner)):
     """Telefondaki şarj kayıtlarının tamamı (en fazla 1000) — sunucudaki liste bununla değişir."""
-    _need_db()
+    await _need_db()
     if len(body) > 1000:
         raise HTTPException(400, "En fazla 1000 kayıt")
     n = await db.replace_sessions(device, [s.model_dump() for s in body])
@@ -384,15 +439,43 @@ async def put_my_sessions(body: list[SessionIn], device: str = Depends(auth.requ
 
 
 @app.get("/me/sessions")
-async def get_my_sessions(device: str = Depends(auth.require_device)):
-    _need_db()
+async def get_my_sessions(device: str = Depends(auth.require_owner)):
+    await _need_db()
     return {"sessions": await db.get_sessions(device)}
 
 
+_DATA_KEYS = {"favorites", "settings"}
+
+
+@app.get("/me/data/{key}")
+async def get_my_data(key: str, owner: str = Depends(auth.require_owner)):
+    """Favori istasyonlar, ayarlar gibi küçük kullanıcı verileri."""
+    if key not in _DATA_KEYS:
+        raise HTTPException(404, "Bilinmeyen veri")
+    await _need_db()
+    return {"data": await db.get_data(owner, key)}
+
+
+@app.put("/me/data/{key}")
+async def put_my_data(key: str, request: Request, owner: str = Depends(auth.require_owner)):
+    if key not in _DATA_KEYS:
+        raise HTTPException(404, "Bilinmeyen veri")
+    await _need_db()
+    raw = await request.body()
+    if len(raw) > 64_000:
+        raise HTTPException(413, "Veri çok büyük")
+    try:
+        data = json.loads(raw or b"null")
+    except ValueError:
+        raise HTTPException(400, "Geçersiz JSON")
+    await db.put_data(owner, key, data)
+    return {"ok": True}
+
+
 @app.get("/me/analysis")
-async def my_analysis(device: str = Depends(auth.require_device)):
+async def my_analysis(device: str = Depends(auth.require_owner)):
     """AI profil analizi: sunucu istatistik hesaplar, Gemini yorumlar (12 saat önbellek, günlük sınır)."""
-    _need_db()
+    await _need_db()
     profile = await db.get_profile(device) or {}
     sessions = await db.get_sessions(device)
     return await profile_ai.analyze(device, profile, sessions)

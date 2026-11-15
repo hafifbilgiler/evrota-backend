@@ -30,11 +30,14 @@ AUDIENCE = "evrota-app"
 _DEVICE_RE = re.compile(r"^[A-Za-z0-9\-]{16,64}$")
 
 
-def issue_token(device_id: str) -> dict:
+def issue_token(device_id: str, uid: Optional[str] = None) -> dict:
+    """uid varsa token Google hesabına bağlıdır (profil, kayıtlar hesapta tutulur)."""
     now = int(time.time())
     exp = now + config.TOKEN_TTL_DAYS * 86400
     payload = {"sub": device_id, "iss": ISSUER, "aud": AUDIENCE, "iat": now, "exp": exp,
-               "jti": uuid.uuid4().hex, "typ": "device"}
+               "jti": uuid.uuid4().hex, "typ": "user" if uid else "device"}
+    if uid:
+        payload["uid"] = uid
     token = jwt.encode(payload, config.JWT_SECRET, algorithm="HS256")
     return {"token": token, "expiresAt": exp, "tokenType": "Bearer"}
 
@@ -58,7 +61,8 @@ def client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-async def register_device(device_id: str, request: Request, integrity_token: Optional[str]) -> dict:
+async def register_device(device_id: str, request: Request, integrity_token: Optional[str],
+                          refresh_token: Optional[str] = None) -> dict:
     if not _DEVICE_RE.match(device_id or ""):
         raise HTTPException(400, "Geçersiz cihaz kimliği")
     if config.PLAY_INTEGRITY_REQUIRED:
@@ -71,6 +75,14 @@ async def register_device(device_id: str, request: Request, integrity_token: Opt
     n = await cache.incr(f"authip:{ip}:{int(time.time() // 3600)}", 3700)
     if n > config.TOKENS_PER_IP_HOUR:
         raise HTTPException(429, "Çok fazla deneme, biraz sonra tekrar deneyin")
+    # Girişli kullanıcı: yenileme anahtarı geçerliyse hesaba bağlı token verilir
+    if refresh_token:
+        from . import db
+        if await db.ensure():
+            uid = await db.check_refresh(refresh_token, device_id)
+            if uid:
+                return {**issue_token(device_id, uid), "signedIn": True}
+        return {**issue_token(device_id), "signedIn": False}
     return issue_token(device_id)
 
 
@@ -91,4 +103,24 @@ async def require_device(request: Request) -> str:
     if await cache.incr(f"rl:d:{device}:{day}", 90000) > config.REQUESTS_PER_DAY:
         raise HTTPException(429, "Günlük kullanım sınırına ulaşıldı")
     request.state.device_id = device
+    request.state.uid = claims.get("uid")
     return device
+
+
+async def require_owner(request: Request) -> str:
+    """
+    Verinin sahibi: girişli kullanıcıda "u:<kullanıcı id>", girişsizde cihaz kimliği.
+    İstek sınırları yine cihaz başına uygulanır.
+    """
+    device = await require_device(request)
+    uid = getattr(request.state, "uid", None)
+    return f"u:{uid}" if uid else device
+
+
+async def require_user(request: Request) -> str:
+    """Sadece Google ile giriş yapmış kullanıcılar (kullanıcı id döner)."""
+    await require_device(request)
+    uid = getattr(request.state, "uid", None)
+    if not uid:
+        raise HTTPException(401, "Bu işlem için Google ile giriş yapmalısın")
+    return uid
