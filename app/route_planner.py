@@ -81,24 +81,24 @@ def _project(pts: list, cum: list, p) -> tuple:
     return cum[bi], best
 
 
-async def _route(client, origin: dict, dest: dict) -> Optional[dict]:
-    body = {"origin": origin, "destination": dest, "travelMode": "DRIVE",
+async def _routes(client, origin: dict, dest: dict) -> list:
+    """Ana rota + Google'ın önerdiği alternatifler (en fazla 3)."""
+    body = {"origin": origin, "destination": dest, "travelMode": "DRIVE", "computeAlternativeRoutes": True,
             "routingPreference": "TRAFFIC_UNAWARE", "languageCode": "tr", "units": "METRIC"}
     r = await client.post("https://routes.googleapis.com/directions/v2:computeRoutes", json=body,
                           headers={"X-Goog-Api-Key": config.ROUTES_KEY,
                                    "X-Goog-FieldMask": "routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline,routes.legs.endLocation"})
     if r.status_code != 200:
         log.warning("Routes HTTP %s: %s", r.status_code, r.text[:300])
-        return None
-    rs = r.json().get("routes") or []
-    if not rs:
-        return None
-    x = rs[0]
-    end = ((x.get("legs") or [{}])[-1].get("endLocation") or {}).get("latLng") or {}
-    return {"distanceKm": round(x["distanceMeters"] / 1000, 1),
-            "durationMin": round(int(str(x.get("duration", "0s")).rstrip("s") or 0) / 60),
-            "polyline": x["polyline"]["encodedPolyline"],
-            "end": [end.get("latitude"), end.get("longitude")]}
+        return []
+    out = []
+    for x in (r.json().get("routes") or [])[:3]:
+        end = ((x.get("legs") or [{}])[-1].get("endLocation") or {}).get("latLng") or {}
+        out.append({"distanceKm": round(x["distanceMeters"] / 1000, 1),
+                    "durationMin": round(int(str(x.get("duration", "0s")).rstrip("s") or 0) / 60),
+                    "polyline": x["polyline"]["encodedPolyline"],
+                    "end": [end.get("latitude"), end.get("longitude")]})
+    return out
 
 
 async def _stations_along(client, pts: list, cum: list, min_kw: int) -> list:
@@ -153,7 +153,7 @@ def _charge_minutes(v: dict, kw: int, from_pct: float, to_pct: float) -> int:
 
 
 async def plan(device: str, origin: dict, dest: dict, vehicle_id: Optional[str], start_soc: int,
-               reserve: int = 10, min_kw: int = 50) -> dict:
+               reserve: int = 10, min_kw: int = 50, route_index: int = 0) -> dict:
     cat = {x["id"]: x for x in news._catalog()}
     v = cat.get(vehicle_id or "")
     if not v:
@@ -164,21 +164,25 @@ async def plan(device: str, origin: dict, dest: dict, vehicle_id: Optional[str],
     day = time.strftime("%Y%m%d", time.gmtime())
     key_src = json.dumps([origin, dest, min_kw], sort_keys=True, ensure_ascii=False)
     gkey = "rp:" + hashlib.sha256(key_src.encode()).hexdigest()[:32]
-    g = await cache.get_json(gkey)
-    if not g:
+    routes = await cache.get_json(gkey)
+    if not routes:
         if await cache.incr(f"rp:d:{device}:{day}", 90000) > config.ROUTE_DAILY_LIMIT:
             return {"error": f"Bugünkü rota hakkın doldu ({config.ROUTE_DAILY_LIMIT}). Yarın tekrar dene."}
         async with httpx.AsyncClient(timeout=httpx.Timeout(25.0, connect=5.0)) as client:
-            route = await _route(client, origin, dest)
-            if not route:
-                return {"error": "Rota bulunamadı; varış yerini daha açık yaz (ör. 'Antalya Merkez')"}
-            pts = decode_polyline(route["polyline"])
-            cum = _cum(pts)
+            routes = await _routes(client, origin, dest)
+        if not routes:
+            return {"error": "Rota bulunamadı; varış yerini listeden seç ya da daha açık yaz"}
+        await cache.set_json(gkey, routes, 24 * 3600)
+    route_index = max(0, min(route_index, len(routes) - 1))
+    route = routes[route_index]
+    skey = f"{gkey}:st{route_index}"
+    stations = await cache.get_json(skey)
+    if stations is None:
+        pts = decode_polyline(route["polyline"])
+        cum = _cum(pts)
+        async with httpx.AsyncClient(timeout=httpx.Timeout(25.0, connect=5.0)) as client:
             stations = await _stations_along(client, pts, cum, min_kw) if route["distanceKm"] > 60 else []
-        g = {"route": route, "stations": stations}
-        await cache.set_json(gkey, g, 24 * 3600)
-
-    route, stations = g["route"], g["stations"]
+        await cache.set_json(skey, stations, 24 * 3600)
     winter = _winter()
     factor = 0.55 if winter else 0.70          # otoyol gerçek menzil / WLTP
     real_range = v["rangeWltp"] * factor
@@ -236,9 +240,47 @@ async def plan(device: str, origin: dict, dest: dict, vehicle_id: Optional[str],
     return {
         "vehicle": f'{v["brand"]} {v["model"]}', "winter": winter, "realRangeKm": round(real_range),
         "distanceKm": total, "driveMin": route["durationMin"], "polyline": route["polyline"],
+        "routeIndex": route_index,
+        "alternatives": [{"index": i, "distanceKm": r["distanceKm"], "durationMin": r["durationMin"],
+                          "polyline": r["polyline"]} for i, r in enumerate(routes)],
         "stops": stops, "chargeMin": charge_total, "totalMin": route["durationMin"] + charge_total,
         "arriveSoc": round(arrive_dest), "kwh": round(kwh_total, 1),
         "costTl": round(kwh_total * price) if isinstance(price, (int, float)) else None,
         "stationsFound": len(stations), "warnings": warnings,
         "assumptions": f"{'Kış' if winter else 'Yaz'} · otoyol · menzil ≈ {round(real_range)} km · rezerv %{reserve}",
     }
+
+
+async def autocomplete(q: str, lat: Optional[float], lng: Optional[float]) -> list:
+    """Places Autocomplete (New): 3+ harfte varış önerileri (Türkiye). 1 gün önbellek."""
+    q = q.strip()[:80]
+    if len(q) < 3 or not config.ROUTES_KEY:
+        return []
+    ck = "ac:" + hashlib.sha256(q.lower().encode()).hexdigest()[:24]
+    cached = await cache.get_json(ck)
+    if cached is not None:
+        return cached
+    body = {"input": q, "includedRegionCodes": ["tr"], "languageCode": "tr"}
+    if lat is not None and lng is not None:
+        body["locationBias"] = {"circle": {"center": {"latitude": lat, "longitude": lng}, "radius": 50000.0}}
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(6.0, connect=3.0)) as client:
+            r = await client.post("https://places.googleapis.com/v1/places:autocomplete", json=body,
+                                  headers={"X-Goog-Api-Key": config.ROUTES_KEY})
+        if r.status_code != 200:
+            log.warning("Autocomplete HTTP %s: %s", r.status_code, r.text[:200])
+            return []
+        out = []
+        for sgg in r.json().get("suggestions", [])[:6]:
+            p = sgg.get("placePrediction") or {}
+            if not p.get("placeId"):
+                continue
+            fmt = p.get("structuredFormat") or {}
+            out.append({"placeId": p["placeId"], "text": (p.get("text") or {}).get("text", ""),
+                        "main": (fmt.get("mainText") or {}).get("text", ""),
+                        "secondary": (fmt.get("secondaryText") or {}).get("text", "")})
+        await cache.set_json(ck, out, 86400)
+        return out
+    except Exception as e:
+        log.warning("Autocomplete hatası: %s", e)
+        return []

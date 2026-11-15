@@ -42,7 +42,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 logging.getLogger("httpx").setLevel(logging.WARNING)   # istek URL'lerini (anahtar vb.) loglama
 log = logging.getLogger("evrota")
 
-VERSION = "0.10.0"
+VERSION = "0.11.0"
 
 
 @asynccontextmanager
@@ -445,7 +445,7 @@ async def get_my_sessions(device: str = Depends(auth.require_owner)):
     return {"sessions": await db.get_sessions(device)}
 
 
-_DATA_KEYS = {"favorites", "settings"}
+_DATA_KEYS = {"favorites", "settings", "routes"}
 
 
 @app.get("/me/data/{key}")
@@ -489,6 +489,8 @@ class RouteIn(BaseModel):
     destination: Optional[str] = Field(default=None, max_length=160)
     destLat: Optional[float] = Field(default=None, ge=-90, le=90)
     destLng: Optional[float] = Field(default=None, ge=-180, le=180)
+    destPlaceId: Optional[str] = Field(default=None, max_length=300)
+    routeIndex: int = Field(default=0, ge=0, le=2)
     vehicleId: Optional[str] = Field(default=None, max_length=80)
     startSoc: int = Field(default=80, ge=5, le=100)
     reserveSoc: int = Field(default=10, ge=5, le=30)
@@ -499,16 +501,29 @@ class RouteIn(BaseModel):
 async def route_plan(body: RouteIn, device: str = Depends(auth.require_device)):
     """Araca göre şarj duraklı rota (Google Routes + rota üzerinde istasyon araması)."""
     origin = {"location": {"latLng": {"latitude": round(body.originLat, 3), "longitude": round(body.originLng, 3)}}}
-    if body.destLat is not None and body.destLng is not None:
+    if body.destPlaceId:
+        dest = {"placeId": body.destPlaceId}
+    elif body.destLat is not None and body.destLng is not None:
         dest = {"location": {"latLng": {"latitude": round(body.destLat, 3), "longitude": round(body.destLng, 3)}}}
     elif body.destination and body.destination.strip():
         dest = {"address": body.destination.strip() + ", Türkiye"}
     else:
         raise HTTPException(400, "Varış yeri gerekli")
-    res = await route_planner.plan(device, origin, dest, body.vehicleId, body.startSoc, body.reserveSoc, body.minKw)
+    res = await route_planner.plan(device, origin, dest, body.vehicleId, body.startSoc, body.reserveSoc, body.minKw,
+                                   body.routeIndex)
     if "error" in res:
         raise HTTPException(422, res["error"])
     return res
+
+
+@app.get("/places/autocomplete")
+async def places_autocomplete(q: str, lat: Optional[float] = None, lng: Optional[float] = None,
+                              device: str = Depends(auth.require_device)):
+    """Rota varış yeri önerileri (3+ harf)."""
+    day = time.strftime("%Y%m%d", time.gmtime())
+    if await cache.incr(f"ac:d:{device}:{day}", 90000) > 300:
+        return {"suggestions": []}
+    return {"suggestions": await route_planner.autocomplete(q, lat, lng)}
 
 
 # ── AI asistan ─────────────────────────────────────────────────
