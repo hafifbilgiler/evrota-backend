@@ -19,6 +19,7 @@ EVrota backend
   GET/PUT /me/profile               kullanıcı profili (araç, ev elektrik fiyatı, alışkanlıklar) — PostgreSQL
   GET/PUT /me/sessions              şarj kayıtları senkronu
   GET  /me/analysis                 AI profil analizi (tasarruf, batarya, saat önerileri)
+  POST /route/plan                  şarj duraklı rota planı (araca, mevsime, rezerve göre)
   POST /agent/chat                   AI EV asistanı (Gemini + EVrota verisiyle fonksiyon çağrısı)
 """
 import json
@@ -35,13 +36,13 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel, Field
 
-from . import agent, auth, cache, config, db, google_auth, insights, news, occupancy, places, profile_ai
+from . import agent, auth, cache, config, db, google_auth, insights, news, occupancy, places, profile_ai, route_planner
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)   # istek URL'lerini (anahtar vb.) loglama
 log = logging.getLogger("evrota")
 
-VERSION = "0.9.0"
+VERSION = "0.10.0"
 
 
 @asynccontextmanager
@@ -479,6 +480,35 @@ async def my_analysis(device: str = Depends(auth.require_owner)):
     profile = await db.get_profile(device) or {}
     sessions = await db.get_sessions(device)
     return await profile_ai.analyze(device, profile, sessions)
+
+
+# ── Rota planlayıcı ────────────────────────────────────────────
+class RouteIn(BaseModel):
+    originLat: float = Field(ge=-90, le=90)
+    originLng: float = Field(ge=-180, le=180)
+    destination: Optional[str] = Field(default=None, max_length=160)
+    destLat: Optional[float] = Field(default=None, ge=-90, le=90)
+    destLng: Optional[float] = Field(default=None, ge=-180, le=180)
+    vehicleId: Optional[str] = Field(default=None, max_length=80)
+    startSoc: int = Field(default=80, ge=5, le=100)
+    reserveSoc: int = Field(default=10, ge=5, le=30)
+    minKw: int = Field(default=50, ge=22, le=350)
+
+
+@app.post("/route/plan")
+async def route_plan(body: RouteIn, device: str = Depends(auth.require_device)):
+    """Araca göre şarj duraklı rota (Google Routes + rota üzerinde istasyon araması)."""
+    origin = {"location": {"latLng": {"latitude": round(body.originLat, 3), "longitude": round(body.originLng, 3)}}}
+    if body.destLat is not None and body.destLng is not None:
+        dest = {"location": {"latLng": {"latitude": round(body.destLat, 3), "longitude": round(body.destLng, 3)}}}
+    elif body.destination and body.destination.strip():
+        dest = {"address": body.destination.strip() + ", Türkiye"}
+    else:
+        raise HTTPException(400, "Varış yeri gerekli")
+    res = await route_planner.plan(device, origin, dest, body.vehicleId, body.startSoc, body.reserveSoc, body.minKw)
+    if "error" in res:
+        raise HTTPException(422, res["error"])
+    return res
 
 
 # ── AI asistan ─────────────────────────────────────────────────

@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: api
-          image: docker.io/hafifbilgiler/evrota-backend:0.9.0
+          image: docker.io/hafifbilgiler/evrota-backend:0.10.0
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
@@ -32,6 +32,9 @@ spec:
             - name: GEMINI_API_KEY
               valueFrom:
                 secretKeyRef: { name: evrota-secrets, key: GEMINI_API_KEY, optional: true }
+            - name: GOOGLE_ROUTES_API_KEY    # EVrota sunucu anahtarı (Routes + Places New)
+              valueFrom:
+                secretKeyRef: { name: evrota-secrets, key: GOOGLE_ROUTES_API_KEY, optional: true }
             - name: GOOGLE_WEB_CLIENT_ID     # Google ile giriş (Web OAuth istemci kimliği, gizli değil)
               value: "173551537780-em0f3ri9hl7rvrfuv1kintvkbgpfu95k.apps.googleusercontent.com"
             - name: DB_PASSWORD              # PostgreSQL (yoksa profil kapalı, API yine çalışır)

@@ -54,6 +54,9 @@ DB_PORT = int(os.getenv("DB_PORT", "5432"))
 DB_USER = os.getenv("DB_USER", "evrota")
 DB_NAME = os.getenv("DB_NAME", "evrota")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "")
+# Rota planlayıcı (Routes API + rota üzerinde istasyon araması); yoksa Places anahtarı denenir
+ROUTES_KEY = os.getenv("GOOGLE_ROUTES_API_KEY", "") or os.getenv("GOOGLE_PLACES_API_KEY", "")
+ROUTE_DAILY_LIMIT = int(os.getenv("ROUTE_DAILY_LIMIT", "15"))
 # Google ile giriş: Google Cloud'daki "Web application" OAuth istemci kimliği (gizli değil)
 GOOGLE_WEB_CLIENT_ID = os.getenv("GOOGLE_WEB_CLIENT_ID", "")
 PROFILE_ANALYSIS_DAILY = int(os.getenv("PROFILE_ANALYSIS_DAILY", "3"))   # cihaz başına günlük AI profil analizi

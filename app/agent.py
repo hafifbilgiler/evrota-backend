@@ -20,7 +20,7 @@ from typing import Awaitable, Callable, Optional
 
 import httpx
 
-from . import cache, config, news, occupancy, places
+from . import cache, config, news, occupancy, places, route_planner
 
 log = logging.getLogger("evrota.agent")
 
@@ -67,6 +67,12 @@ TOOLS = [{"functionDeclarations": [
          "senaryo": {"type": "string", "enum": list(SCENARIOS)},
          "baslangic_yuzde": {"type": "integer", "description": "Çıkıştaki şarj %, varsayılan 90"}},
          "required": ["arac_id", "mesafe_km"]}},
+    {"name": "rota_planla",
+     "description": "Kullanıcının konumundan bir varış yerine, aracına göre şarj duraklı rota planlar (durak, şarj süresi, varış %).",
+     "parameters": {"type": "object", "properties": {
+         "varis": {"type": "string", "description": "Varış yeri, ör. 'Antalya' veya 'Ankara Kızılay'"},
+         "baslangic_yuzde": {"type": "integer", "description": "Çıkıştaki şarj %, bilinmiyorsa 80"}},
+         "required": ["varis"]}},
     {"name": "maliyet_hesapla",
      "description": "Mesafe, tüketim ve kWh fiyatıyla şarj maliyetini hesaplar.",
      "parameters": {"type": "object", "properties": {
@@ -169,6 +175,25 @@ async def _run_tool(name: str, args: dict, ctx: dict, stations_fn) -> dict:
         return {"arac": _v(v)["ad"], "senaryo_menzil_km": int(real), "ilk_bacak_km": int(first),
                 "sarj_duragi": stops, "toplam_sarj_dk": stops * v["dc10to80Min"],
                 "varsayim": f"%{start} ile çıkış, %10'da şarj, %10→%80 dolum"}
+    if name == "rota_planla":
+        if ctx.get("lat") is None:
+            return {"hata": "Konum yok. Kullanıcı uygulamada konum iznini açmalı."}
+        res = await route_planner.plan(ctx.get("_device", "agent"),
+            {"location": {"latLng": {"latitude": round(ctx["lat"], 3), "longitude": round(ctx["lng"], 3)}}},
+            {"address": str(args.get("varis", ""))[:120] + ", Türkiye"}, ctx.get("vehicleId"),
+            max(10, min(int(args.get("baslangic_yuzde") or 80), 100)))
+        if "error" in res:
+            return {"hata": res["error"]}
+        for s in res["stops"]:
+            ctx.setdefault("_places", {})[s["id"]] = {
+                "id": s["id"], "name": s["name"], "operator": s.get("operator"), "lat": s["lat"], "lng": s["lng"],
+                "distance": int(s["routeKm"] * 1000), "available": s.get("available"), "total": s.get("total"),
+                "maxKw": s.get("maxKw"), "address": s.get("address"), "mapsUri": None}
+        return {"mesafe_km": res["distanceKm"], "surus_dk": res["driveMin"], "toplam_dk": res["totalMin"],
+                "varis_yuzde": res["arriveSoc"], "varsayim": res["assumptions"], "uyarilar": res["warnings"],
+                "duraklar": [{"ad": s["name"], "firma": s["operator"], "rota_km": s["routeKm"], "kw": s["maxKw"],
+                              "varis_yuzde": s["arriveSoc"], "cikis_yuzde": s["departSoc"], "sarj_dk": s["chargeMin"]}
+                             for s in res["stops"]]}
     if name == "maliyet_hesapla":
         v = _find(cat, args.get("arac_id")) or _find(cat, ctx.get("vehicleId"))
         cons = (v["batteryKwh"] / v["rangeWltp"] * 100 * 1.15) if v else 18.0
@@ -285,6 +310,7 @@ async def chat(device: str, messages: list, ctx: dict,
         return {"reply": f"Bugünkü asistan mesaj hakkın doldu ({config.AGENT_DAILY_LIMIT}). Yarın tekrar görüşelim!",
                 "available": True, "limited": True, "remaining": 0}
 
+    ctx["_device"] = device
     cat = news._catalog()
     my = _find(cat, ctx.get("vehicleId"))
     ctx_text = (f'kullanıcının aracı: {_v(my)["ad"]} (id {my["id"]})' if my else "kullanıcı araç seçmemiş") + \
