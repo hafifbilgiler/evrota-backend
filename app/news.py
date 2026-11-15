@@ -165,9 +165,10 @@ async def _classify_with_gemini(items: list) -> Optional[list]:
     lines = "\n".join(f'{i}. [{it["source"]}] {it["title"]} — {it["snippet"][:300]}' for i, it in enumerate(items))
     body = {
         "contents": [{"parts": [{"text": GEMINI_PROMPT.format(items=lines)}]}],
-        "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json", "maxOutputTokens": 8192},
+        "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json", "maxOutputTokens": 8192,
+                             "thinkingConfig": {"thinkingBudget": 0}}   # düşünme kapalı: maliyet,
     }
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{config.GEMINI_MODEL}:generateContent"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{config.NEWS_GEMINI_MODEL}:generateContent"
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=5.0)) as client:
             r = await client.post(url, headers={"x-goog-api-key": config.GEMINI_API_KEY}, json=body)

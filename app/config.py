@@ -28,6 +28,7 @@ MAX_BODY_BYTES = int(os.getenv("MAX_BODY_BYTES", "16384"))
 NEWS_FEEDS_FILE = os.getenv("NEWS_FEEDS_FILE", os.path.join(DATA_DIR, "news_feeds.json"))
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+NEWS_GEMINI_MODEL = os.getenv("NEWS_GEMINI_MODEL", "gemini-2.5-flash-lite")   # haber özetleme: ucuz model
 NEWS_MAX_PER_RUN = int(os.getenv("NEWS_MAX_PER_RUN", "60"))
 # AI asistan (POST /agent/chat)
 AGENT_DAILY_LIMIT = int(os.getenv("AGENT_DAILY_LIMIT", "30"))     # cihaz başına günlük mesaj

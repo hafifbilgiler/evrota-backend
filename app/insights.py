@@ -69,7 +69,8 @@ async def get_insight(vehicle_id: str) -> Optional[dict]:
     prompt = PROMPT.format(car=_spec(v), rivals="\n".join("- " + _spec(x) for x in rivals),
                            rival_ids=", ".join(x["id"] for x in rivals))
     body = {"contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"temperature": 0.3, "responseMimeType": "application/json", "maxOutputTokens": 4096}}
+            "generationConfig": {"temperature": 0.3, "responseMimeType": "application/json", "maxOutputTokens": 4096,
+                                 "thinkingConfig": {"thinkingBudget": 0}}}
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{config.GEMINI_MODEL}:generateContent"
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(45.0, connect=5.0)) as client:
