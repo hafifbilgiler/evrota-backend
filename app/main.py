@@ -43,7 +43,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 logging.getLogger("httpx").setLevel(logging.WARNING)   # istek URL'lerini (anahtar vb.) loglama
 log = logging.getLogger("evrota")
 
-VERSION = "0.12.0"
+VERSION = "0.13.0"
 
 
 @asynccontextmanager
@@ -404,6 +404,11 @@ class ProfileIn(BaseModel):
     climate: Optional[str] = Field(default=None, max_length=30)
     usage: Optional[str] = Field(default=None, max_length=30)
     city: Optional[str] = Field(default=None, max_length=40)
+    tariff: Optional[str] = Field(default=None, pattern="^(tek|uc_zamanli)$")      # ev elektrik tarifesi
+    nightPriceKwh: Optional[float] = Field(default=None, ge=0, le=100)             # üç zamanlı: gece (22-06)
+    dayPriceKwh: Optional[float] = Field(default=None, ge=0, le=100)               # gündüz (06-17)
+    peakPriceKwh: Optional[float] = Field(default=None, ge=0, le=100)              # puant (17-22)
+    reminderHour: Optional[int] = Field(default=None, ge=0, le=23)
 
 
 class SessionIn(BaseModel):
