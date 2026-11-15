@@ -19,6 +19,7 @@ EVrota backend
   GET/PUT /me/profile               kullanıcı profili (araç, ev elektrik fiyatı, alışkanlıklar) — PostgreSQL
   GET/PUT /me/sessions              şarj kayıtları senkronu
   GET  /me/analysis                 AI profil analizi (tasarruf, batarya, saat önerileri)
+  POST /stations/{id}/rating · GET /stations/{id}/ratings   istasyon puanı, etiketler, yorumlar
   POST /route/plan                  şarj duraklı rota planı (araca, mevsime, rezerve göre)
   POST /agent/chat                   AI EV asistanı (Gemini + EVrota verisiyle fonksiyon çağrısı)
 """
@@ -42,7 +43,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 logging.getLogger("httpx").setLevel(logging.WARNING)   # istek URL'lerini (anahtar vb.) loglama
 log = logging.getLogger("evrota")
 
-VERSION = "0.11.0"
+VERSION = "0.12.0"
 
 
 @asynccontextmanager
@@ -224,9 +225,16 @@ async def _attach_counts(payload: dict, lat: float, lng: float, radius: int, ope
 
 
 async def _attach_reports(stations: list) -> None:
-    """Her istasyona son kullanıcı bildirimlerinin özetini ekler."""
+    """Her istasyona son kullanıcı bildirimlerinin özetini ve kullanıcı puanını ekler."""
     for s in stations:
         s["reports"] = await _report_summary(s["id"])
+    if stations and db.ready():
+        try:
+            avgs = await db.rating_avgs([s["id"] for s in stations])
+            for s in stations:
+                s["userRating"] = avgs.get(s["id"])
+        except Exception as e:
+            log.warning("Puanlar eklenemedi: %s", e)
 
 
 @app.get("/operators")
@@ -482,6 +490,37 @@ async def my_analysis(device: str = Depends(auth.require_owner)):
     return await profile_ai.analyze(device, profile, sessions)
 
 
+# ── İstasyon puanlama ──────────────────────────────────────────
+RATING_TAGS = {"tuvalet", "kafe", "market", "yemek", "kapali_alan", "gece_guvenli", "engelli",
+               "acik_7_24", "sik_ariza", "sik_kuyruk", "temiz", "aydinlik"}
+
+
+class RatingIn(BaseModel):
+    stars: int = Field(ge=1, le=5)
+    tags: list[str] = Field(default_factory=list, max_length=12)
+    comment: Optional[str] = Field(default=None, max_length=280)
+
+
+@app.post("/stations/{station_id}/rating")
+async def rate_station(station_id: str, body: RatingIn, owner: str = Depends(auth.require_owner)):
+    """İstasyonu puanla (kişi başına 1 puan, tekrar gönderilirse güncellenir)."""
+    if not _ID_RE.match(station_id):
+        raise HTTPException(400, "Geçersiz istasyon")
+    await _need_db()
+    tags = sorted({t for t in body.tags if t in RATING_TAGS})
+    comment = (body.comment or "").strip() or None
+    await db.put_rating(station_id, owner, body.stars, tags, comment)
+    return {"ok": True, "summary": await db.rating_summary(station_id, owner)}
+
+
+@app.get("/stations/{station_id}/ratings")
+async def station_ratings(station_id: str, owner: str = Depends(auth.require_owner)):
+    if not _ID_RE.match(station_id):
+        raise HTTPException(400, "Geçersiz istasyon")
+    await _need_db()
+    return await db.rating_summary(station_id, owner)
+
+
 # ── Rota planlayıcı ────────────────────────────────────────────
 class RouteIn(BaseModel):
     originLat: float = Field(ge=-90, le=90)
@@ -514,6 +553,15 @@ async def route_plan(body: RouteIn, device: str = Depends(auth.require_device)):
     if "error" in res:
         raise HTTPException(422, res["error"])
     return res
+
+
+@app.get("/weather")
+async def get_weather(lat: float, lng: float, _: str = Depends(auth.require_device)):
+    """Anlık sıcaklık/rüzgâr ve bu havada otoyol menzil oranı (menzil hesaplayıcı için)."""
+    w = await route_planner.weather(lat, lng)
+    if not w:
+        raise HTTPException(503, "Hava durumu şu an alınamıyor")
+    return {**w, "highwayFactor": route_planner.range_factor(w["tempC"], w["windKmh"])}
 
 
 @app.get("/places/autocomplete")

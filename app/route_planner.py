@@ -141,6 +141,47 @@ def _winter() -> bool:
     return datetime.now(TR).month in (11, 12, 1, 2, 3)
 
 
+async def weather(lat: float, lng: float) -> Optional[dict]:
+    """Open-Meteo (ücretsiz, anahtarsız): anlık sıcaklık ve rüzgâr. 1 saat önbellek."""
+    ck = f"wx:{round(lat, 1)}:{round(lng, 1)}"
+    cached = await cache.get_json(ck)
+    if cached:
+        return cached
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(6.0, connect=3.0)) as client:
+            r = await client.get("https://api.open-meteo.com/v1/forecast", params={
+                "latitude": round(lat, 2), "longitude": round(lng, 2),
+                "current": "temperature_2m,wind_speed_10m", "timezone": "Europe/Istanbul"})
+        if r.status_code != 200:
+            return None
+        cur = r.json().get("current") or {}
+        w = {"tempC": round(cur.get("temperature_2m", 15)), "windKmh": round(cur.get("wind_speed_10m", 0))}
+        await cache.set_json(ck, w, 3600)
+        return w
+    except Exception as e:
+        log.warning("Hava durumu alınamadı: %s", e)
+        return None
+
+
+def range_factor(temp_c: Optional[float], wind_kmh: Optional[float]) -> float:
+    """Otoyolda gerçek menzil / WLTP: 20 °C üstü ≈ 0.70; soğukta ısıtma ve batarya kimyası düşürür; sert rüzgâr az etkiler."""
+    if temp_c is None:
+        return 0.55 if _winter() else 0.70
+    if temp_c >= 20:
+        f = 0.70
+    elif temp_c >= 10:
+        f = 0.66
+    elif temp_c >= 0:
+        f = 0.60
+    elif temp_c >= -10:
+        f = 0.53
+    else:
+        f = 0.48
+    if wind_kmh and wind_kmh > 30:
+        f *= 0.95
+    return f
+
+
 def _charge_minutes(v: dict, kw: int, from_pct: float, to_pct: float) -> int:
     """%10→80 süresinden orantılı; istasyon araçtan yavaşsa uzar; %80 üstü çok yavaş."""
     base = v["dc10to80Min"] / 70.0           # % başına dakika (araç tam güçte)
@@ -184,7 +225,14 @@ async def plan(device: str, origin: dict, dest: dict, vehicle_id: Optional[str],
             stations = await _stations_along(client, pts, cum, min_kw) if route["distanceKm"] > 60 else []
         await cache.set_json(skey, stations, 24 * 3600)
     winter = _winter()
-    factor = 0.55 if winter else 0.70          # otoyol gerçek menzil / WLTP
+    # Gerçek hava: başlangıç ve varış noktalarının ortalaması (alınamazsa mevsime göre)
+    pts_all = decode_polyline(route["polyline"])
+    wx_a = await weather(pts_all[0][0], pts_all[0][1])
+    wx_b = await weather(pts_all[-1][0], pts_all[-1][1])
+    wxs = [w for w in (wx_a, wx_b) if w]
+    temp = sum(w["tempC"] for w in wxs) / len(wxs) if wxs else None
+    wind = max(w["windKmh"] for w in wxs) if wxs else None
+    factor = range_factor(temp, wind)          # otoyol gerçek menzil / WLTP
     real_range = v["rangeWltp"] * factor
     km_per_pct = real_range / 100.0
     kwh_per_pct = v["batteryKwh"] / 100.0
@@ -247,7 +295,9 @@ async def plan(device: str, origin: dict, dest: dict, vehicle_id: Optional[str],
         "arriveSoc": round(arrive_dest), "kwh": round(kwh_total, 1),
         "costTl": round(kwh_total * price) if isinstance(price, (int, float)) else None,
         "stationsFound": len(stations), "warnings": warnings,
-        "assumptions": f"{'Kış' if winter else 'Yaz'} · otoyol · menzil ≈ {round(real_range)} km · rezerv %{reserve}",
+        "weather": None if temp is None else {"tempC": round(temp), "windKmh": wind},
+        "assumptions": (f"Hava {round(temp)}°C" + (f", rüzgâr {wind} km/s" if wind and wind > 30 else "") if temp is not None
+                        else ("Kış" if winter else "Yaz")) + f" · otoyol · menzil ≈ {round(real_range)} km · rezerv %{reserve}",
     }
 
 

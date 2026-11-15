@@ -42,6 +42,17 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     last_used   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- İstasyon puanları (kişi başına istasyon başına 1 puan; güncellenebilir)
+CREATE TABLE IF NOT EXISTS station_ratings (
+    station_id  TEXT NOT NULL,
+    owner       TEXT NOT NULL,
+    stars       SMALLINT NOT NULL CHECK (stars BETWEEN 1 AND 5),
+    tags        TEXT[] NOT NULL DEFAULT '{}',
+    comment     TEXT,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (station_id, owner)
+);
+CREATE INDEX IF NOT EXISTS station_ratings_station ON station_ratings (station_id, created_at DESC);
 -- Favoriler, ayarlar gibi küçük kullanıcı verileri
 CREATE TABLE IF NOT EXISTS user_data (
     owner       TEXT NOT NULL,
@@ -230,3 +241,39 @@ async def put_data(owner: str, k: str, data: Any) -> None:
         await c.execute("""INSERT INTO user_data (owner, k, data, updated_at) VALUES ($1,$2,$3::jsonb, now())
                            ON CONFLICT (owner, k) DO UPDATE SET data=EXCLUDED.data, updated_at=now()""",
                         owner, k, json.dumps(data, ensure_ascii=False))
+
+
+# ── İstasyon puanları ─────────────────────────────────────────
+async def put_rating(station_id: str, owner: str, stars: int, tags: list, comment: Optional[str]) -> None:
+    async with _pool.acquire() as c:
+        await c.execute("""INSERT INTO station_ratings (station_id, owner, stars, tags, comment, created_at)
+                           VALUES ($1,$2,$3,$4,$5, now())
+                           ON CONFLICT (station_id, owner) DO UPDATE SET stars=EXCLUDED.stars, tags=EXCLUDED.tags,
+                               comment=EXCLUDED.comment, created_at=now()""",
+                        station_id, owner, stars, tags, comment)
+
+
+async def rating_summary(station_id: str, owner: Optional[str] = None) -> dict:
+    async with _pool.acquire() as c:
+        agg = await c.fetchrow("SELECT count(*) AS n, avg(stars)::float AS avg FROM station_ratings WHERE station_id=$1", station_id)
+        tags = await c.fetch("""SELECT t, count(*) AS n FROM station_ratings, unnest(tags) AS t
+                                WHERE station_id=$1 GROUP BY t ORDER BY n DESC""", station_id)
+        recent = await c.fetch("""SELECT stars, tags, comment, created_at FROM station_ratings
+                                  WHERE station_id=$1 AND comment IS NOT NULL AND comment <> ''
+                                  ORDER BY created_at DESC LIMIT 10""", station_id)
+        mine = await c.fetchrow("SELECT stars, tags, comment FROM station_ratings WHERE station_id=$1 AND owner=$2",
+                                station_id, owner) if owner else None
+    return {"count": agg["n"], "avg": round(agg["avg"], 1) if agg["avg"] else None,
+            "tags": {r["t"]: r["n"] for r in tags},
+            "comments": [{"stars": r["stars"], "tags": list(r["tags"]), "comment": r["comment"],
+                          "at": int(r["created_at"].timestamp() * 1000)} for r in recent],
+            "mine": None if not mine else {"stars": mine["stars"], "tags": list(mine["tags"]), "comment": mine["comment"]}}
+
+
+async def rating_avgs(station_ids: list) -> dict:
+    if not station_ids:
+        return {}
+    async with _pool.acquire() as c:
+        rows = await c.fetch("""SELECT station_id, count(*) AS n, avg(stars)::float AS avg FROM station_ratings
+                                WHERE station_id = ANY($1::text[]) GROUP BY station_id""", station_ids)
+    return {r["station_id"]: {"avg": round(r["avg"], 1), "count": r["n"]} for r in rows}
