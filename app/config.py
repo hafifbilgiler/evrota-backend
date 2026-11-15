@@ -48,6 +48,14 @@ def gemini_config(model: str, temperature: float, max_tokens: int, json_mode: bo
         cfg["thinkingConfig"] = {"thinkingLevel": GEMINI_THINKING_LEVEL}
     return cfg
 NEWS_MAX_PER_RUN = int(os.getenv("NEWS_MAX_PER_RUN", "60"))
+# PostgreSQL (kalıcı veri: profil, şarj kayıtları)
+DB_HOST = os.getenv("DB_HOST", "evrota-postgres")
+DB_PORT = int(os.getenv("DB_PORT", "5432"))
+DB_USER = os.getenv("DB_USER", "evrota")
+DB_NAME = os.getenv("DB_NAME", "evrota")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "")
+PROFILE_ANALYSIS_DAILY = int(os.getenv("PROFILE_ANALYSIS_DAILY", "3"))   # cihaz başına günlük AI profil analizi
+
 # AI asistan (POST /agent/chat)
 AGENT_DAILY_LIMIT = int(os.getenv("AGENT_DAILY_LIMIT", "30"))     # cihaz başına günlük mesaj
 AGENT_MAX_CHARS = int(os.getenv("AGENT_MAX_CHARS", "800"))        # mesaj başına karakter

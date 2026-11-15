@@ -12,6 +12,9 @@ EVrota backend
   GET  /news?limit=&category=&before= EV haberleri (kendi özetimiz + kaynak linki)
   GET  /vehicles/{id}/insight        AI araç değerlendirmesi (katalog verisine dayalı)
   GET  /stations/{id}/pattern        doluluk deseni: "genelde ne zaman boş" (kendi topladığımız geçmiş)
+  GET/PUT /me/profile               kullanıcı profili (araç, ev elektrik fiyatı, alışkanlıklar) — PostgreSQL
+  GET/PUT /me/sessions              şarj kayıtları senkronu
+  GET  /me/analysis                 AI profil analizi (tasarruf, batarya, saat önerileri)
   POST /agent/chat                   AI EV asistanı (Gemini + EVrota verisiyle fonksiyon çağrısı)
 """
 import json
@@ -28,13 +31,13 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel, Field
 
-from . import agent, auth, cache, config, insights, news, occupancy, places
+from . import agent, auth, cache, config, db, insights, news, occupancy, places, profile_ai
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)   # istek URL'lerini (anahtar vb.) loglama
 log = logging.getLogger("evrota")
 
-VERSION = "0.7.0"
+VERSION = "0.8.0"
 
 
 @asynccontextmanager
@@ -42,7 +45,9 @@ async def lifespan(_: FastAPI):
     if len(config.JWT_SECRET) < 32:
         raise RuntimeError("EVROTA_JWT_SECRET tanımlı değil ya da 32 karakterden kısa; servis başlatılmadı")
     await cache.connect()
+    await db.connect()
     yield
+    await db.close()
     await cache.close()
 
 
@@ -320,6 +325,77 @@ async def station_pattern(station_id: str, _: str = Depends(auth.require_device)
     if res is None:
         raise HTTPException(503, "Şu an kullanılamıyor")
     return res
+
+
+# ── Profil (PostgreSQL) ────────────────────────────────────────
+class ProfileIn(BaseModel):
+    vehicleId: Optional[str] = Field(default=None, max_length=80)
+    homePriceKwh: Optional[float] = Field(default=None, ge=0, le=100)
+    hasHomeCharger: Optional[bool] = None
+    homeChargerKw: Optional[float] = Field(default=None, ge=0, le=50)
+    dailyKm: Optional[int] = Field(default=None, ge=0, le=2000)
+    batteryHealth: Optional[int] = Field(default=None, ge=40, le=100)
+    preferredOperators: list[str] = Field(default_factory=list, max_length=20)
+    chargeLimit: Optional[int] = Field(default=None, ge=50, le=100)
+    climate: Optional[str] = Field(default=None, max_length=30)
+    usage: Optional[str] = Field(default=None, max_length=30)
+    city: Optional[str] = Field(default=None, max_length=40)
+
+
+class SessionIn(BaseModel):
+    id: str = Field(max_length=64)
+    vehicleId: Optional[str] = Field(default=None, max_length=80)
+    stationId: Optional[str] = Field(default=None, max_length=300)
+    stationName: str = Field(default="", max_length=120)
+    kwh: float = Field(ge=0, le=500)
+    cost: float = Field(ge=0, le=100000)
+    socFrom: Optional[int] = Field(default=None, ge=0, le=100)
+    socTo: Optional[int] = Field(default=None, ge=0, le=100)
+    isDc: bool = False
+    chargedAt: int = Field(gt=0)
+
+
+def _need_db():
+    if not db.ready():
+        raise HTTPException(503, "Profil şu an kullanılamıyor")
+
+
+@app.get("/me/profile")
+async def get_my_profile(device: str = Depends(auth.require_device)):
+    _need_db()
+    return {"profile": await db.get_profile(device)}
+
+
+@app.put("/me/profile")
+async def put_my_profile(body: ProfileIn, device: str = Depends(auth.require_device)):
+    _need_db()
+    await db.put_profile(device, body.model_dump())
+    return {"ok": True}
+
+
+@app.put("/me/sessions")
+async def put_my_sessions(body: list[SessionIn], device: str = Depends(auth.require_device)):
+    """Telefondaki şarj kayıtlarının tamamı (en fazla 1000) — sunucudaki liste bununla değişir."""
+    _need_db()
+    if len(body) > 1000:
+        raise HTTPException(400, "En fazla 1000 kayıt")
+    n = await db.replace_sessions(device, [s.model_dump() for s in body])
+    return {"ok": True, "count": n}
+
+
+@app.get("/me/sessions")
+async def get_my_sessions(device: str = Depends(auth.require_device)):
+    _need_db()
+    return {"sessions": await db.get_sessions(device)}
+
+
+@app.get("/me/analysis")
+async def my_analysis(device: str = Depends(auth.require_device)):
+    """AI profil analizi: sunucu istatistik hesaplar, Gemini yorumlar (12 saat önbellek, günlük sınır)."""
+    _need_db()
+    profile = await db.get_profile(device) or {}
+    sessions = await db.get_sessions(device)
+    return await profile_ai.analyze(device, profile, sessions)
 
 
 # ── AI asistan ─────────────────────────────────────────────────

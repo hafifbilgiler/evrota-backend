@@ -1,0 +1,69 @@
+# EVrota kalıcı veritabanı: profil, şarj kayıtları, (ileride) istasyon dizini ve doluluk geçmişi.
+# Önce parola secret'a eklenir (kendi terminalinde, ekrana yazdırmadan):
+#   kubectl -n evrota patch secret evrota-secrets -p "{\"stringData\":{\"POSTGRES_PASSWORD\":\"$(openssl rand -hex 24)\"}}"
+# Disk: kümedeki varsayılan StorageClass kullanılır (kubectl get storageclass).
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: evrota-postgres
+  namespace: evrota
+  labels: { app: evrota-postgres }
+spec:
+  serviceName: evrota-postgres
+  replicas: 1
+  selector:
+    matchLabels: { app: evrota-postgres }
+  template:
+    metadata:
+      labels: { app: evrota-postgres }
+    spec:
+      securityContext:
+        fsGroup: 999
+      containers:
+        - name: postgres
+          image: docker.io/library/postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: evrota
+            - name: POSTGRES_USER
+              value: evrota
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: evrota-secrets, key: POSTGRES_PASSWORD }
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 512Mi }
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "evrota", "-d", "evrota"] }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec: { command: ["pg_isready", "-U", "evrota", "-d", "evrota"] }
+            initialDelaySeconds: 30
+            periodSeconds: 30
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: evrota-postgres
+  namespace: evrota
+spec:
+  selector: { app: evrota-postgres }
+  ports:
+    - port: 5432
+      targetPort: 5432

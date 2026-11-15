@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: api
-          image: docker.io/hafifbilgiler/evrota-backend:0.7.0
+          image: docker.io/hafifbilgiler/evrota-backend:0.8.0
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
@@ -32,6 +32,9 @@ spec:
             - name: GEMINI_API_KEY
               valueFrom:
                 secretKeyRef: { name: evrota-secrets, key: GEMINI_API_KEY, optional: true }
+            - name: DB_PASSWORD              # PostgreSQL (yoksa profil kapalı, API yine çalışır)
+              valueFrom:
+                secretKeyRef: { name: evrota-secrets, key: POSTGRES_PASSWORD, optional: true }
             - name: AGENT_DAILY_LIMIT        # AI asistan: cihaz başına günlük mesaj
               value: "30"
             - name: AGENT_PROVIDER           # "gemini" | "deepinfra" | yedekli: "gemini,deepinfra"
