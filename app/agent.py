@@ -172,12 +172,94 @@ async def _run_tool(name: str, args: dict, ctx: dict, stations_fn) -> dict:
     return {"hata": "Bilinmeyen fonksiyon"}
 
 
+class _ProviderDown(Exception):
+    """Sağlayıcı kullanılamıyor (kredi bitti, anahtar yok, bağlantı yok) → yedeğe geç."""
+
+
+async def _gemini(client, system: str, history: list, ctx: dict, stations_fn, used_tools: list) -> str:
+    contents = [{"role": "model" if m["role"] == "assistant" else "user", "parts": [{"text": m["text"]}]}
+                for m in history]
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{config.GEMINI_MODEL}:generateContent"
+    for _ in range(5):
+        body = {"systemInstruction": {"parts": [{"text": system}]}, "contents": contents, "tools": TOOLS,
+                "generationConfig": {"temperature": 0.4, "maxOutputTokens": 1024,
+                                     "thinkingConfig": {"thinkingBudget": 0}}}
+        try:
+            r = await client.post(url, headers={"x-goog-api-key": config.GEMINI_API_KEY}, json=body)
+        except httpx.HTTPError as e:
+            raise _ProviderDown(f"Gemini bağlantı: {e}")
+        if r.status_code != 200:
+            raise _ProviderDown(f"Gemini HTTP {r.status_code}: {r.text[:300]}")
+        cand = (r.json().get("candidates") or [{}])[0]
+        parts = (cand.get("content") or {}).get("parts") or []
+        calls = [p["functionCall"] for p in parts if "functionCall" in p]
+        if not calls:
+            return "".join(p.get("text", "") for p in parts).strip()
+        contents.append({"role": "model", "parts": parts})
+        responses = []
+        for c in calls[:4]:
+            name, args = c.get("name", ""), c.get("args") or {}
+            used_tools.append(name)
+            responses.append({"functionResponse": {"name": name, "response": await _run_tool(name, args, ctx, stations_fn)}})
+        contents.append({"role": "user", "parts": responses})
+    return ""
+
+
+# OpenAI uyumlu biçim (DeepInfra vb.) için aynı fonksiyon tanımları
+OPENAI_TOOLS = [{"type": "function", "function": f} for f in TOOLS[0]["functionDeclarations"]]
+
+
+async def _openai_compat(client, system: str, history: list, ctx: dict, stations_fn, used_tools: list) -> str:
+    """DeepInfra (OpenAI uyumlu) — function calling ile aynı EVrota araçlarını kullanır."""
+    msgs = [{"role": "system", "content": system}] + \
+           [{"role": m["role"], "content": m["text"]} for m in history]
+    url = config.DEEPINFRA_BASE_URL.rstrip("/") + "/chat/completions"
+    for _ in range(5):
+        body = {"model": config.DEEPINFRA_MODEL, "messages": msgs, "tools": OPENAI_TOOLS,
+                "tool_choice": "auto", "temperature": 0.4, "max_tokens": 1024}
+        try:
+            r = await client.post(url, headers={"Authorization": f"Bearer {config.DEEPINFRA_API_KEY}"}, json=body)
+        except httpx.HTTPError as e:
+            raise _ProviderDown(f"DeepInfra bağlantı: {e}")
+        if r.status_code != 200:
+            raise _ProviderDown(f"DeepInfra HTTP {r.status_code}: {r.text[:300]}")
+        msg = ((r.json().get("choices") or [{}])[0]).get("message") or {}
+        calls = msg.get("tool_calls") or []
+        if not calls:
+            text = (msg.get("content") or "").strip()
+            # Bazı modeller düşünce bloğu döndürür; kullanıcıya göstermeyiz
+            if "</think>" in text:
+                text = text.split("</think>", 1)[1].strip()
+            return text
+        msgs.append({"role": "assistant", "content": msg.get("content") or "", "tool_calls": calls})
+        for c in calls[:4]:
+            fn = c.get("function") or {}
+            name = fn.get("name", "")
+            try:
+                args = json.loads(fn.get("arguments") or "{}")
+            except ValueError:
+                args = {}
+            used_tools.append(name)
+            res = await _run_tool(name, args, ctx, stations_fn)
+            msgs.append({"role": "tool", "tool_call_id": c.get("id", name), "content": json.dumps(res, ensure_ascii=False)})
+    return ""
+
+
+def _providers() -> list:
+    """AGENT_PROVIDER sırası: ilk çalışan kullanılır, hata olursa sıradakine geçilir."""
+    avail = {"gemini": (bool(config.GEMINI_API_KEY), _gemini),
+             "deepinfra": (bool(config.DEEPINFRA_API_KEY), _openai_compat)}
+    order = [p.strip() for p in config.AGENT_PROVIDER.split(",") if p.strip()]
+    return [(name, avail[name][1]) for name in order if name in avail and avail[name][0]]
+
+
 async def chat(device: str, messages: list, ctx: dict,
                stations_fn: Callable[..., Awaitable[dict]]) -> dict:
-    if not config.GEMINI_API_KEY:
+    providers = _providers()
+    if not providers:
         return {"reply": "Asistan şu an kullanılamıyor.", "available": False}
     day = time.strftime("%Y%m%d", time.gmtime())
-    used = await cache.incr(f"agent:d:{device}:{day}", 90000)   # (Gemini hatası olsa da sayılır: kötüye kullanım koruması)
+    used = await cache.incr(f"agent:d:{device}:{day}", 90000)   # (hata olsa da sayılır: kötüye kullanım koruması)
     if used > config.AGENT_DAILY_LIMIT:
         return {"reply": f"Bugünkü asistan mesaj hakkın doldu ({config.AGENT_DAILY_LIMIT}). Yarın tekrar görüşelim!",
                 "available": True, "limited": True, "remaining": 0}
@@ -186,48 +268,27 @@ async def chat(device: str, messages: list, ctx: dict,
     my = _find(cat, ctx.get("vehicleId"))
     ctx_text = (f'kullanıcının aracı: {_v(my)["ad"]} (id {my["id"]})' if my else "kullanıcı araç seçmemiş") + \
                ("; konum var" if ctx.get("lat") is not None else "; konum yok")
-    contents = []
+    history = []
     for m in messages[-12:]:
-        role = "model" if m.get("role") == "assistant" else "user"
         text = str(m.get("text") or "")[:config.AGENT_MAX_CHARS]
         if text:
-            contents.append({"role": role, "parts": [{"text": text}]})
-    if not contents or contents[-1]["role"] != "user":
+            history.append({"role": "assistant" if m.get("role") == "assistant" else "user", "text": text})
+    if not history or history[-1]["role"] != "user":
         return {"reply": "Bir soru yazar mısın?", "available": True}
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{config.GEMINI_MODEL}:generateContent"
-    used_tools = []
+    system = SYSTEM.format(ctx=ctx_text)
     async with httpx.AsyncClient(timeout=httpx.Timeout(40.0, connect=5.0)) as client:
-        for _ in range(5):
-            body = {"systemInstruction": {"parts": [{"text": SYSTEM.format(ctx=ctx_text)}]},
-                    "contents": contents, "tools": TOOLS,
-                    "generationConfig": {"temperature": 0.4, "maxOutputTokens": 1024,
-                                         "thinkingConfig": {"thinkingBudget": 0}}}
+        for name, fn in providers:
+            used_tools: list = []
             try:
-                r = await client.post(url, headers={"x-goog-api-key": config.GEMINI_API_KEY}, json=body)
-            except httpx.HTTPError as e:
-                log.warning("Gemini bağlantı: %s", e)
-                return {"reply": "Asistana şu an ulaşılamıyor, birazdan tekrar dene.", "available": True}
-            if r.status_code != 200:
-                log.warning("Gemini HTTP %s: %s", r.status_code, r.text[:300])
-                if r.status_code in (402, 403):
-                    return {"reply": "Asistan şu an bakımda, kısa süre içinde tekrar açılacak.", "available": False}
-                if r.status_code == 429:
-                    return {"reply": "Asistan şu an çok yoğun, bir dakika sonra tekrar dene.", "available": True}
-                return {"reply": "Asistan şu an yanıt veremedi, birazdan tekrar dene.", "available": True}
-            cand = (r.json().get("candidates") or [{}])[0]
-            parts = (cand.get("content") or {}).get("parts") or []
-            calls = [p["functionCall"] for p in parts if "functionCall" in p]
-            if not calls:
-                text = "".join(p.get("text", "") for p in parts).strip()
-                return {"reply": text or "Bunu yanıtlayamadım, farklı sorar mısın?", "available": True,
-                        "tools": used_tools, "remaining": max(0, config.AGENT_DAILY_LIMIT - used)}
-            contents.append({"role": "model", "parts": parts})
-            responses = []
-            for c in calls[:4]:
-                name, args = c.get("name", ""), c.get("args") or {}
-                used_tools.append(name)
-                res = await _run_tool(name, args, ctx, stations_fn)
-                responses.append({"functionResponse": {"name": name, "response": res}})
-            contents.append({"role": "user", "parts": responses})
-    return {"reply": "Bu soru biraz karışık oldu, daha kısa sorar mısın?", "available": True, "tools": used_tools}
+                text = await fn(client, system, history, ctx, stations_fn, used_tools)
+            except _ProviderDown as e:
+                log.warning("Asistan sağlayıcısı %s kullanılamadı: %s", name, e)
+                continue
+            except Exception as e:
+                log.exception("Asistan %s hatası: %s", name, e)
+                continue
+            return {"reply": text or "Bunu yanıtlayamadım, farklı sorar mısın?", "available": True,
+                    "provider": name, "tools": used_tools,
+                    "remaining": max(0, config.AGENT_DAILY_LIMIT - used)}
+    return {"reply": "Asistan şu an bakımda, kısa süre içinde tekrar açılacak.", "available": False}

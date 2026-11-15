@@ -33,3 +33,8 @@ NEWS_MAX_PER_RUN = int(os.getenv("NEWS_MAX_PER_RUN", "60"))
 # AI asistan (POST /agent/chat)
 AGENT_DAILY_LIMIT = int(os.getenv("AGENT_DAILY_LIMIT", "30"))     # cihaz başına günlük mesaj
 AGENT_MAX_CHARS = int(os.getenv("AGENT_MAX_CHARS", "800"))        # mesaj başına karakter
+# Asistan sağlayıcı sırası: ilk çalışan kullanılır, hata/kredi bitti olursa sıradakine geçer
+AGENT_PROVIDER = os.getenv("AGENT_PROVIDER", "gemini,deepinfra")
+DEEPINFRA_API_KEY = os.getenv("DEEPINFRA_API_KEY", "")
+DEEPINFRA_BASE_URL = os.getenv("DEEPINFRA_BASE_URL", "https://api.deepinfra.com/v1/openai")
+DEEPINFRA_MODEL = os.getenv("DEEPINFRA_MODEL", "deepseek-ai/DeepSeek-V4-Flash-0731")

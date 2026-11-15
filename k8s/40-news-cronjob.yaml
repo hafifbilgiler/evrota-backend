@@ -18,7 +18,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: news
-              image: docker.io/hafifbilgiler/evrota-backend:0.6.2
+              image: docker.io/hafifbilgiler/evrota-backend:0.6.3
               command: ["python", "-m", "app.news_job"]
               env:
                 - name: REDIS_URL
