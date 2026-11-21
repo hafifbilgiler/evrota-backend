@@ -124,3 +124,9 @@ async def require_user(request: Request) -> str:
     if not uid:
         raise HTTPException(401, "Bu işlem için Google ile giriş yapmalısın")
     return uid
+
+
+def owner_of(request: Request) -> str:
+    """require_device çalıştıktan sonra: verinin sahibi ("u:<id>" ya da cihaz kimliği)."""
+    uid = getattr(request.state, "uid", None)
+    return f"u:{uid}" if uid else request.state.device_id

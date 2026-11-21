@@ -24,6 +24,7 @@ EVrota backend
   POST /agent/chat                   AI EV asistanı (Gemini + EVrota verisiyle fonksiyon çağrısı)
   PUT/DELETE /me/push               bildirim anahtarı (FCM) ve bildirim tercihleri
   POST/DELETE /stations/{id}/watch  "boşalınca haber ver" (2 saat geçerli, tek seferlik)
+  GET/POST /me/premium              Premium durumu · Google Play satın almasını doğrula
 """
 import asyncio
 import json
@@ -40,13 +41,13 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel, Field
 
-from . import agent, auth, cache, config, db, google_auth, insights, news, occupancy, places, profile_ai, push, route_planner, watch
+from . import agent, auth, cache, config, db, google_auth, insights, news, occupancy, places, premium, profile_ai, push, route_planner, watch
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)   # istek URL'lerini (anahtar vb.) loglama
 log = logging.getLogger("evrota")
 
-VERSION = "0.14.0"
+VERSION = "0.15.0"
 
 
 @asynccontextmanager
@@ -497,7 +498,8 @@ async def my_analysis(device: str = Depends(auth.require_owner)):
     await _need_db()
     profile = await db.get_profile(device) or {}
     sessions = await db.get_sessions(device)
-    return await profile_ai.analyze(device, profile, sessions)
+    lim = config.PROFILE_ANALYSIS_DAILY_PREMIUM if await premium.is_premium(device) else None
+    return await profile_ai.analyze(device, profile, sessions, lim)
 
 
 # ── İstasyon puanlama ──────────────────────────────────────────
@@ -547,7 +549,7 @@ class RouteIn(BaseModel):
 
 
 @app.post("/route/plan")
-async def route_plan(body: RouteIn, device: str = Depends(auth.require_device)):
+async def route_plan(body: RouteIn, request: Request, device: str = Depends(auth.require_device)):
     """Araca göre şarj duraklı rota (Google Routes + rota üzerinde istasyon araması)."""
     origin = {"location": {"latLng": {"latitude": round(body.originLat, 3), "longitude": round(body.originLng, 3)}}}
     if body.destPlaceId:
@@ -558,8 +560,9 @@ async def route_plan(body: RouteIn, device: str = Depends(auth.require_device)):
         dest = {"address": body.destination.strip() + ", Türkiye"}
     else:
         raise HTTPException(400, "Varış yeri gerekli")
+    lim = config.ROUTE_DAILY_LIMIT_PREMIUM if await premium.is_premium(auth.owner_of(request)) else None
     res = await route_planner.plan(device, origin, dest, body.vehicleId, body.startSoc, body.reserveSoc, body.minKw,
-                                   body.routeIndex)
+                                   body.routeIndex, lim)
     if "error" in res:
         raise HTTPException(422, res["error"])
     return res
@@ -598,9 +601,10 @@ class ChatIn(BaseModel):
 
 
 @app.post("/agent/chat")
-async def agent_chat(body: ChatIn, device: str = Depends(auth.require_device)):
+async def agent_chat(body: ChatIn, request: Request, device: str = Depends(auth.require_device)):
     ctx = {"lat": body.lat if body.lng is not None else None, "lng": body.lng, "vehicleId": body.vehicleId}
-    return await agent.chat(device, [m.model_dump() for m in body.messages], ctx, _stations_payload)
+    lim = config.AGENT_DAILY_LIMIT_PREMIUM if await premium.is_premium(auth.owner_of(request)) else None
+    return await agent.chat(device, [m.model_dump() for m in body.messages], ctx, _stations_payload, lim)
 
 
 @app.get("/vehicles/{vehicle_id}/insight")
@@ -666,3 +670,26 @@ async def watch_station(station_id: str, body: WatchIn, owner: str = Depends(aut
 async def unwatch_station(station_id: str, owner: str = Depends(auth.require_owner)):
     await watch.remove(owner, station_id)
     return {"ok": True}
+
+
+# ── Premium (Google Play aboneliği) ────────────────────────────
+class PremiumIn(BaseModel):
+    purchaseToken: str = Field(min_length=20, max_length=4096)
+    productId: str = Field(default="", max_length=100)
+
+
+@app.post("/me/premium")
+async def register_premium(body: PremiumIn, owner: str = Depends(auth.require_owner)):
+    await _need_db()
+    if body.productId and body.productId != config.PREMIUM_PRODUCT:
+        raise HTTPException(400, "Geçersiz ürün")
+    v = await premium.register(owner, body.purchaseToken)
+    if v is None:
+        raise HTTPException(422, "Satın alma doğrulanamadı. Birazdan tekrar dene.")
+    return {"active": v["active"], "expiresAt": v["expires"]}
+
+
+@app.get("/me/premium")
+async def get_premium(owner: str = Depends(auth.require_owner)):
+    s = await premium.status(owner)
+    return {"active": s.get("active", False), "expiresAt": s.get("expires", 0)}

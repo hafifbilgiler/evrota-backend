@@ -300,14 +300,16 @@ def _providers() -> list:
 
 
 async def chat(device: str, messages: list, ctx: dict,
-               stations_fn: Callable[..., Awaitable[dict]]) -> dict:
+               stations_fn: Callable[..., Awaitable[dict]], limit: Optional[int] = None) -> dict:
     providers = _providers()
     if not providers:
         return {"reply": "Asistan şu an kullanılamıyor.", "available": False}
     day = time.strftime("%Y%m%d", time.gmtime())
     used = await cache.incr(f"agent:d:{device}:{day}", 90000)   # (hata olsa da sayılır: kötüye kullanım koruması)
-    if used > config.AGENT_DAILY_LIMIT:
-        return {"reply": f"Bugünkü asistan mesaj hakkın doldu ({config.AGENT_DAILY_LIMIT}). Yarın tekrar görüşelim!",
+    limit = limit or config.AGENT_DAILY_LIMIT
+    if used > limit:
+        extra = "" if limit > config.AGENT_DAILY_LIMIT else " EVrota Premium ile sınırsız sohbet edebilirsin."
+        return {"reply": f"Bugünkü asistan mesaj hakkın doldu ({limit}). Yarın tekrar görüşelim!{extra}",
                 "available": True, "limited": True, "remaining": 0}
 
     ctx["_device"] = device
@@ -337,5 +339,5 @@ async def chat(device: str, messages: list, ctx: dict,
                 continue
             return {"reply": text or "Bunu yanıtlayamadım, farklı sorar mısın?", "available": True,
                     "provider": name, "tools": used_tools, "places": _places_for(text, ctx),
-                    "remaining": max(0, config.AGENT_DAILY_LIMIT - used)}
+                    "remaining": max(0, limit - used)}
     return {"reply": "Asistan şu an bakımda, kısa süre içinde tekrar açılacak.", "available": False}

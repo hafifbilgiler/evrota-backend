@@ -16,8 +16,7 @@ from . import config
 
 log = logging.getLogger("evrota.push")
 _sa: Optional[dict] = None
-_token: Optional[str] = None
-_token_exp = 0.0
+_tokens: dict = {}   # kapsam → (erişim anahtarı, bitiş)
 
 
 def _account() -> Optional[dict]:
@@ -37,26 +36,30 @@ def enabled() -> bool:
 
 
 async def _access_token(client: httpx.AsyncClient) -> Optional[str]:
-    """Servis hesabıyla imzalı JWT → Google OAuth erişim anahtarı (50 dk önbellek)."""
-    global _token, _token_exp
-    if _token and time.time() < _token_exp:
-        return _token
+    return await google_token(client, "https://www.googleapis.com/auth/firebase.messaging")
+
+
+async def google_token(client: httpx.AsyncClient, scope: str) -> Optional[str]:
+    """Servis hesabıyla imzalı JWT → Google OAuth erişim anahtarı (kapsam başına 50 dk önbellek)."""
+    hit = _tokens.get(scope)
+    if hit and time.time() < hit[1]:
+        return hit[0]
     sa = _account()
     if not sa:
         return None
     now = int(time.time())
     assertion = jwt.encode({
-        "iss": sa["client_email"], "scope": "https://www.googleapis.com/auth/firebase.messaging",
+        "iss": sa["client_email"], "scope": scope,
         "aud": sa.get("token_uri", "https://oauth2.googleapis.com/token"), "iat": now, "exp": now + 3600,
     }, sa["private_key"], algorithm="RS256")
     r = await client.post(sa.get("token_uri", "https://oauth2.googleapis.com/token"),
                           data={"grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer", "assertion": assertion})
     if r.status_code != 200:
-        log.error("FCM erişim anahtarı alınamadı: HTTP %s", r.status_code)
+        log.error("Google erişim anahtarı alınamadı (%s): HTTP %s", scope.rsplit("/", 1)[-1], r.status_code)
         return None
-    _token = r.json()["access_token"]
-    _token_exp = time.time() + 3000
-    return _token
+    token = r.json()["access_token"]
+    _tokens[scope] = (token, time.time() + 3000)
+    return token
 
 
 async def send(tokens: list[str], title: str, body: str, data: dict) -> list[str]:

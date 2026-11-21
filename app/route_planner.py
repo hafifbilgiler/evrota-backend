@@ -194,7 +194,7 @@ def _charge_minutes(v: dict, kw: int, from_pct: float, to_pct: float) -> int:
 
 
 async def plan(device: str, origin: dict, dest: dict, vehicle_id: Optional[str], start_soc: int,
-               reserve: int = 10, min_kw: int = 50, route_index: int = 0) -> dict:
+               reserve: int = 10, min_kw: int = 50, route_index: int = 0, limit: Optional[int] = None) -> dict:
     cat = {x["id"]: x for x in news._catalog()}
     v = cat.get(vehicle_id or "")
     if not v:
@@ -207,8 +207,10 @@ async def plan(device: str, origin: dict, dest: dict, vehicle_id: Optional[str],
     gkey = "rp:" + hashlib.sha256(key_src.encode()).hexdigest()[:32]
     routes = await cache.get_json(gkey)
     if not routes:
-        if await cache.incr(f"rp:d:{device}:{day}", 90000) > config.ROUTE_DAILY_LIMIT:
-            return {"error": f"Bugünkü rota hakkın doldu ({config.ROUTE_DAILY_LIMIT}). Yarın tekrar dene."}
+        limit = limit or config.ROUTE_DAILY_LIMIT
+        if await cache.incr(f"rp:d:{device}:{day}", 90000) > limit:
+            extra = "" if limit > config.ROUTE_DAILY_LIMIT else " EVrota Premium ile sınırsız rota planlayabilirsin."
+            return {"error": f"Bugünkü rota hakkın doldu ({limit}). Yarın tekrar dene.{extra}"}
         async with httpx.AsyncClient(timeout=httpx.Timeout(25.0, connect=5.0)) as client:
             routes = await _routes(client, origin, dest)
         if not routes:

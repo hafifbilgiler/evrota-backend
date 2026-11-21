@@ -75,3 +75,9 @@ WATCH_TTL = int(os.getenv("WATCH_TTL", "7200"))                    # takip 2 saa
 WATCH_INTERVAL = int(os.getenv("WATCH_INTERVAL", "180"))           # 3 dakikada bir kontrol
 WATCH_MAX_PER_OWNER = int(os.getenv("WATCH_MAX_PER_OWNER", "3"))
 WATCH_CHECKS_DAILY = int(os.getenv("WATCH_CHECKS_DAILY", "800"))   # günlük Google detay sorgusu üst sınırı
+# Premium (Google Play aboneliği) — satın alma sunucuda Play Developer API ile doğrulanır
+PLAY_PACKAGE = os.getenv("PLAY_PACKAGE", "com.evrota.app")
+PREMIUM_PRODUCT = os.getenv("PREMIUM_PRODUCT", "evrota_premium")
+AGENT_DAILY_LIMIT_PREMIUM = int(os.getenv("AGENT_DAILY_LIMIT_PREMIUM", "200"))       # adil kullanım üst sınırı
+ROUTE_DAILY_LIMIT_PREMIUM = int(os.getenv("ROUTE_DAILY_LIMIT_PREMIUM", "100"))
+PROFILE_ANALYSIS_DAILY_PREMIUM = int(os.getenv("PROFILE_ANALYSIS_DAILY_PREMIUM", "10"))

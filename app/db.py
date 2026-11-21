@@ -69,6 +69,17 @@ CREATE TABLE IF NOT EXISTS push_tokens (
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS push_tokens_owner ON push_tokens (owner);
+-- Premium abonelikler (Google Play satın alma anahtarı; sunucuda doğrulanır)
+CREATE TABLE IF NOT EXISTS premium_subs (
+    purchase_token TEXT PRIMARY KEY,
+    owner       TEXT NOT NULL,
+    product     TEXT NOT NULL,
+    state       TEXT NOT NULL,
+    expires_at  TIMESTAMPTZ NOT NULL,
+    test        BOOLEAN NOT NULL DEFAULT false,
+    checked_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS premium_subs_owner ON premium_subs (owner, expires_at DESC);
 """
 
 
@@ -224,6 +235,7 @@ async def migrate_device_to_user(device_id: str, uid: str) -> dict:
             moved["data"] = int(r.split()[-1])
             await c.execute("DELETE FROM user_data WHERE owner=$1", device_id)
             await c.execute("DELETE FROM profiles WHERE device_id=$1", device_id)
+            await c.execute("UPDATE premium_subs SET owner=$1 WHERE owner=$2", owner, device_id)
     return moved
 
 
@@ -236,6 +248,7 @@ async def delete_user(uid: str) -> None:
             await c.execute("DELETE FROM charge_sessions WHERE device_id=$1", owner)
             await c.execute("DELETE FROM user_data WHERE owner=$1", owner)
             await c.execute("DELETE FROM push_tokens WHERE owner=$1", owner)
+            await c.execute("DELETE FROM premium_subs WHERE owner=$1", owner)
             await c.execute("DELETE FROM users WHERE id=$1", uid)   # refresh_tokens CASCADE
 
 
@@ -312,3 +325,21 @@ async def push_tokens_for(owners: list, pref: str) -> list:
         rows = await c.fetch("""SELECT token FROM push_tokens WHERE owner = ANY($1::text[])
                                 AND COALESCE((prefs->>$2)::boolean, true)""", owners, pref)
     return [r["token"] for r in rows]
+
+
+# ── Premium ──
+async def put_premium(owner: str, token: str, product: str, state: str, expires_ts: int, test: bool) -> None:
+    async with _pool.acquire() as c:
+        await c.execute("""INSERT INTO premium_subs (purchase_token, owner, product, state, expires_at, test, checked_at)
+                           VALUES ($1, $2, $3, $4, to_timestamp($5), $6, now())
+                           ON CONFLICT (purchase_token) DO UPDATE SET owner=EXCLUDED.owner, state=EXCLUDED.state,
+                           expires_at=EXCLUDED.expires_at, test=EXCLUDED.test, checked_at=now()""",
+                        token, owner, product, state, expires_ts, test)
+
+
+async def latest_premium(owner: str) -> Optional[dict]:
+    async with _pool.acquire() as c:
+        row = await c.fetchrow("""SELECT purchase_token, product, state, extract(epoch FROM expires_at)::bigint AS exp,
+                                  test, extract(epoch FROM checked_at)::bigint AS checked
+                                  FROM premium_subs WHERE owner=$1 ORDER BY expires_at DESC LIMIT 1""", owner)
+    return dict(row) if row else None

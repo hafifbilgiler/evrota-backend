@@ -78,7 +78,7 @@ SADECE şu JSON'u döndür:
 "tasarruf_tl": veride "hesap_evde_sarj_tasarrufu_tl" varsa o sayı, yoksa null."""
 
 
-async def analyze(device: str, profile: dict, sessions: list) -> dict:
+async def analyze(device: str, profile: dict, sessions: list, limit: Optional[int] = None) -> dict:
     data = stats(profile, sessions)
     key = "pa:" + hashlib.sha256((device + json.dumps(data, sort_keys=True)).encode()).hexdigest()[:32]
     cached = await cache.get_json(key)
@@ -87,8 +87,9 @@ async def analyze(device: str, profile: dict, sessions: list) -> dict:
     if not config.GEMINI_API_KEY:
         return {"available": False, "reason": "AI analizi şu an kullanılamıyor", "stats": data}
     day = time.strftime("%Y%m%d", time.gmtime())
-    if await cache.incr(f"pa:d:{device}:{day}", 90000) > config.PROFILE_ANALYSIS_DAILY:
-        return {"available": False, "reason": f"Bugünkü analiz hakkın doldu ({config.PROFILE_ANALYSIS_DAILY}). Yarın tekrar dene.",
+    limit = limit or config.PROFILE_ANALYSIS_DAILY
+    if await cache.incr(f"pa:d:{device}:{day}", 90000) > limit:
+        return {"available": False, "reason": f"Bugünkü analiz hakkın doldu ({limit}). Yarın tekrar dene.",
                 "stats": data}
     body = {"contents": [{"parts": [{"text": PROMPT.format(data=json.dumps(data, ensure_ascii=False, indent=1))}]}],
             "generationConfig": config.gemini_config(config.GEMINI_MODEL, 0.3, 2048, json_mode=True)}
