@@ -22,7 +22,10 @@ EVrota backend
   POST /stations/{id}/rating · GET /stations/{id}/ratings   istasyon puanı, etiketler, yorumlar
   POST /route/plan                  şarj duraklı rota planı (araca, mevsime, rezerve göre)
   POST /agent/chat                   AI EV asistanı (Gemini + EVrota verisiyle fonksiyon çağrısı)
+  PUT/DELETE /me/push               bildirim anahtarı (FCM) ve bildirim tercihleri
+  POST/DELETE /stations/{id}/watch  "boşalınca haber ver" (2 saat geçerli, tek seferlik)
 """
+import asyncio
 import json
 import logging
 import re
@@ -37,13 +40,13 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel, Field
 
-from . import agent, auth, cache, config, db, google_auth, insights, news, occupancy, places, profile_ai, route_planner
+from . import agent, auth, cache, config, db, google_auth, insights, news, occupancy, places, profile_ai, push, route_planner, watch
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)   # istek URL'lerini (anahtar vb.) loglama
 log = logging.getLogger("evrota")
 
-VERSION = "0.13.0"
+VERSION = "0.14.0"
 
 
 @asynccontextmanager
@@ -52,7 +55,9 @@ async def lifespan(_: FastAPI):
         raise RuntimeError("EVROTA_JWT_SECRET tanımlı değil ya da 32 karakterden kısa; servis başlatılmadı")
     await cache.connect()
     await db.connect()
+    watcher = asyncio.create_task(watch.loop())   # "boşalınca haber ver" kontrolü
     yield
+    watcher.cancel()
     await db.close()
     await cache.close()
 
@@ -606,3 +611,58 @@ async def vehicle_insight(vehicle_id: str, _: str = Depends(auth.require_device)
     if res is None:
         raise HTTPException(404, "Araç bulunamadı")
     return res
+
+
+# ── Bildirimler ────────────────────────────────────────────────
+class PushIn(BaseModel):
+    token: str = Field(min_length=20, max_length=4096)
+    prefs: dict = Field(default_factory=dict)
+
+
+@app.put("/me/push")
+async def put_push(body: PushIn, owner: str = Depends(auth.require_owner)):
+    await _need_db()
+    prefs = {k: bool(v) for k, v in body.prefs.items() if k in ("stationFree", "favorites", "news")}
+    await db.put_push_token(owner, body.token, prefs)
+    return {"ok": True, "enabled": push.enabled()}
+
+
+class PushDel(BaseModel):
+    token: str = Field(max_length=4096)
+
+
+@app.delete("/me/push")
+async def delete_push(body: PushDel, _: str = Depends(auth.require_owner)):
+    await _need_db()
+    await db.delete_push_tokens([body.token])
+    return {"ok": True}
+
+
+class WatchIn(BaseModel):
+    name: str = Field(default="", max_length=200)
+    lat: float = 0.0
+    lng: float = 0.0
+
+
+@app.post("/stations/{station_id}/watch")
+async def watch_station(station_id: str, body: WatchIn, owner: str = Depends(auth.require_owner)):
+    if not _ID_RE.match(station_id):
+        raise HTTPException(400, "Geçersiz istasyon")
+    await _need_db()
+    if not push.enabled():
+        raise HTTPException(503, "Bildirimler şu an kullanılamıyor")
+    if not await db.has_push_token(owner):
+        raise HTTPException(409, "Bildirim kaydı bulunamadı. Uygulamayı yeniden açıp tekrar dene.")
+    if await watch.active_count(owner) >= config.WATCH_MAX_PER_OWNER:
+        raise HTTPException(429, f"Aynı anda en fazla {config.WATCH_MAX_PER_OWNER} istasyonu takip edebilirsin")
+    try:
+        until = await watch.add(owner, station_id, body.name, body.lat, body.lng)
+    except RuntimeError:
+        raise HTTPException(503, "Takip şu an başlatılamıyor")
+    return {"ok": True, "expiresAt": until}
+
+
+@app.delete("/stations/{station_id}/watch")
+async def unwatch_station(station_id: str, owner: str = Depends(auth.require_owner)):
+    await watch.remove(owner, station_id)
+    return {"ok": True}

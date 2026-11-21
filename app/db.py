@@ -61,6 +61,14 @@ CREATE TABLE IF NOT EXISTS user_data (
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (owner, k)
 );
+-- Bildirim anahtarları (FCM). Sahip: cihaz kimliği ya da "u:<id>"; bir sahibin birden fazla telefonu olabilir.
+CREATE TABLE IF NOT EXISTS push_tokens (
+    token       TEXT PRIMARY KEY,
+    owner       TEXT NOT NULL,
+    prefs       JSONB NOT NULL DEFAULT '{}'::jsonb,
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS push_tokens_owner ON push_tokens (owner);
 """
 
 
@@ -227,6 +235,7 @@ async def delete_user(uid: str) -> None:
             await c.execute("DELETE FROM profiles WHERE device_id=$1", owner)
             await c.execute("DELETE FROM charge_sessions WHERE device_id=$1", owner)
             await c.execute("DELETE FROM user_data WHERE owner=$1", owner)
+            await c.execute("DELETE FROM push_tokens WHERE owner=$1", owner)
             await c.execute("DELETE FROM users WHERE id=$1", uid)   # refresh_tokens CASCADE
 
 
@@ -277,3 +286,29 @@ async def rating_avgs(station_ids: list) -> dict:
         rows = await c.fetch("""SELECT station_id, count(*) AS n, avg(stars)::float AS avg FROM station_ratings
                                 WHERE station_id = ANY($1::text[]) GROUP BY station_id""", station_ids)
     return {r["station_id"]: {"avg": round(r["avg"], 1), "count": r["n"]} for r in rows}
+
+
+# ── Bildirim anahtarları ──
+async def put_push_token(owner: str, token: str, prefs: dict) -> None:
+    async with _pool.acquire() as c:
+        await c.execute("""INSERT INTO push_tokens (token, owner, prefs, updated_at) VALUES ($1, $2, $3::jsonb, now())
+                           ON CONFLICT (token) DO UPDATE SET owner=EXCLUDED.owner, prefs=EXCLUDED.prefs, updated_at=now()""",
+                        token, owner, json.dumps(prefs))
+
+
+async def delete_push_tokens(tokens: list) -> None:
+    async with _pool.acquire() as c:
+        await c.execute("DELETE FROM push_tokens WHERE token = ANY($1::text[])", tokens)
+
+
+async def has_push_token(owner: str) -> bool:
+    async with _pool.acquire() as c:
+        return bool(await c.fetchval("SELECT 1 FROM push_tokens WHERE owner=$1 LIMIT 1", owner))
+
+
+async def push_tokens_for(owners: list, pref: str) -> list:
+    """Sahiplerin, ilgili bildirimi kapatmamış telefonlarının anahtarları."""
+    async with _pool.acquire() as c:
+        rows = await c.fetch("""SELECT token FROM push_tokens WHERE owner = ANY($1::text[])
+                                AND COALESCE((prefs->>$2)::boolean, true)""", owners, pref)
+    return [r["token"] for r in rows]

@@ -190,3 +190,27 @@ async def search_stations(lat: float, lng: float, radius: int, operator: Optiona
     except Exception as e:
         log.warning("Places hatası: %s", e)
         return None
+
+
+_DETAIL_FIELDS = "id,displayName,formattedAddress,location,evChargeOptions,googleMapsUri"
+
+
+async def get_station(place_id: str) -> Optional[dict]:
+    """Tek istasyonun güncel doluluğu (takip kontrolü için). Hata olursa None."""
+    if not config.GOOGLE_PLACES_API_KEY:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=4.0)) as client:
+            r = await client.get(f"https://places.googleapis.com/v1/places/{place_id}",
+                                 headers={"X-Goog-Api-Key": config.GOOGLE_PLACES_API_KEY,
+                                          "X-Goog-FieldMask": _DETAIL_FIELDS},
+                                 params={"languageCode": "tr"})
+        if r.status_code != 200:
+            log.warning("Places detay HTTP %s", r.status_code)
+            return None
+        p = r.json()
+        loc = p.get("location") or {}
+        return normalize(p, loc.get("latitude", 0.0), loc.get("longitude", 0.0))
+    except Exception as e:
+        log.warning("Places detay hatası: %s", e)
+        return None

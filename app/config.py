@@ -69,3 +69,9 @@ AGENT_PROVIDER = os.getenv("AGENT_PROVIDER", "gemini")   # "gemini" | "deepinfra
 DEEPINFRA_API_KEY = os.getenv("DEEPINFRA_API_KEY", "")
 DEEPINFRA_BASE_URL = os.getenv("DEEPINFRA_BASE_URL", "https://api.deepinfra.com/v1/openai")
 DEEPINFRA_MODEL = os.getenv("DEEPINFRA_MODEL", "deepseek-ai/DeepSeek-V4-Flash-0731")
+# Bildirimler (Firebase Cloud Messaging) ve "boşalınca haber ver"
+FIREBASE_SA_FILE = os.getenv("FIREBASE_SA_FILE", "/secrets/firebase/sa.json")
+WATCH_TTL = int(os.getenv("WATCH_TTL", "7200"))                    # takip 2 saat geçerli
+WATCH_INTERVAL = int(os.getenv("WATCH_INTERVAL", "180"))           # 3 dakikada bir kontrol
+WATCH_MAX_PER_OWNER = int(os.getenv("WATCH_MAX_PER_OWNER", "3"))
+WATCH_CHECKS_DAILY = int(os.getenv("WATCH_CHECKS_DAILY", "800"))   # günlük Google detay sorgusu üst sınırı
