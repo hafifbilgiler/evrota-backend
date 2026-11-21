@@ -249,6 +249,7 @@ async def delete_user(uid: str) -> None:
             await c.execute("DELETE FROM user_data WHERE owner=$1", owner)
             await c.execute("DELETE FROM push_tokens WHERE owner=$1", owner)
             await c.execute("DELETE FROM premium_subs WHERE owner=$1", owner)
+            await c.execute("DELETE FROM station_ratings WHERE owner=$1", owner)
             await c.execute("DELETE FROM users WHERE id=$1", uid)   # refresh_tokens CASCADE
 
 

@@ -88,6 +88,14 @@ async def _check_once() -> None:
             await r.srem(f"watch_owner:{o}", sid)
 
 
+def _prices():
+    try:
+        with open(config.PRICES_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
 async def loop() -> None:
     """Uygulama ömrü boyunca çalışır. Birden fazla pod olursa Redis kilidi tek kontrol yapılmasını sağlar."""
     await asyncio.sleep(20)
@@ -96,6 +104,10 @@ async def loop() -> None:
             r = cache.client()
             if r is not None and await r.set("watch:lock", "1", nx=True, ex=config.WATCH_INTERVAL - 10):
                 await _check_once()
+            if r is not None and await r.set("alerts:lock", "1", nx=True, ex=config.ALERT_INTERVAL - 10):
+                from . import alerts
+                await alerts.check_stations()
+                await alerts.check_prices(_prices())
         except asyncio.CancelledError:
             raise
         except Exception as e:

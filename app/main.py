@@ -25,6 +25,7 @@ EVrota backend
   PUT/DELETE /me/push               bildirim anahtarı (FCM) ve bildirim tercihleri
   POST/DELETE /stations/{id}/watch  "boşalınca haber ver" (2 saat geçerli, tek seferlik)
   GET/POST /me/premium              Premium durumu · Google Play satın almasını doğrula
+  GET/PUT /me/alerts                Premium: favori istasyon ve fiyat alarmları
 """
 import asyncio
 import json
@@ -41,13 +42,13 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel, Field
 
-from . import agent, auth, cache, config, db, google_auth, insights, news, occupancy, places, premium, profile_ai, push, route_planner, watch
+from . import agent, auth, cache, config, db, google_auth, insights, news, occupancy, places, alerts, premium, profile_ai, push, route_planner, watch
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)   # istek URL'lerini (anahtar vb.) loglama
 log = logging.getLogger("evrota")
 
-VERSION = "0.15.0"
+VERSION = "0.16.0"
 
 
 @asynccontextmanager
@@ -693,3 +694,36 @@ async def register_premium(body: PremiumIn, owner: str = Depends(auth.require_ow
 async def get_premium(owner: str = Depends(auth.require_owner)):
     s = await premium.status(owner)
     return {"active": s.get("active", False), "expiresAt": s.get("expires", 0)}
+
+
+# ── Premium alarmları ─────────────────────────────────────────
+class AlertStation(BaseModel):
+    id: str = Field(max_length=300)
+    name: str = Field(default="", max_length=200)
+    lat: float = 0.0
+    lng: float = 0.0
+
+
+class AlertsIn(BaseModel):
+    stations: list[AlertStation] = Field(default_factory=list, max_length=alerts.MAX_STATIONS)
+    price: bool = False
+
+
+@app.get("/me/alerts")
+async def get_alerts(owner: str = Depends(auth.require_owner)):
+    await _need_db()
+    return {"alerts": await db.get_data(owner, "alerts") or {"stations": [], "price": False},
+            "premium": await premium.is_premium(owner), "max": alerts.MAX_STATIONS}
+
+
+@app.put("/me/alerts")
+async def put_alerts(body: AlertsIn, owner: str = Depends(auth.require_owner)):
+    await _need_db()
+    if (body.stations or body.price) and not await premium.is_premium(owner):
+        raise HTTPException(403, "Alarmlar EVrota Premium ile kullanılabilir")
+    for s in body.stations:
+        if not _ID_RE.match(s.id):
+            raise HTTPException(400, "Geçersiz istasyon")
+    data = {"stations": [s.model_dump() for s in body.stations], "price": body.price}
+    await db.put_data(owner, "alerts", data)
+    return {"ok": True, "alerts": data}

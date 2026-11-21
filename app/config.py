@@ -81,3 +81,4 @@ PREMIUM_PRODUCT = os.getenv("PREMIUM_PRODUCT", "evrota_premium")
 AGENT_DAILY_LIMIT_PREMIUM = int(os.getenv("AGENT_DAILY_LIMIT_PREMIUM", "200"))       # adil kullanım üst sınırı
 ROUTE_DAILY_LIMIT_PREMIUM = int(os.getenv("ROUTE_DAILY_LIMIT_PREMIUM", "100"))
 PROFILE_ANALYSIS_DAILY_PREMIUM = int(os.getenv("PROFILE_ANALYSIS_DAILY_PREMIUM", "10"))
+ALERT_INTERVAL = int(os.getenv("ALERT_INTERVAL", "600"))              # premium favori/fiyat alarmları: 10 dk
