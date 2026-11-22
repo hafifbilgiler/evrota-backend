@@ -31,6 +31,8 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")            # asistan + araç değerlendirmesi
 NEWS_GEMINI_MODEL = os.getenv("NEWS_GEMINI_MODEL", GEMINI_MODEL)          # haber özetleme (ucuz model varsa env ile)
 GEMINI_THINKING_LEVEL = os.getenv("GEMINI_THINKING_LEVEL", "low")
+# Ücretsiz Premium verilen Google hesapları (Play inceleme hesabı, ekip). Virgülle; k8s secret: PREMIUM_COMP_EMAILS
+PREMIUM_COMP_EMAILS = {e.strip().lower() for e in os.getenv("PREMIUM_COMP_EMAILS", "").split(",") if e.strip()}
 AGENT_WEB_PER_DEVICE = int(os.getenv("AGENT_WEB_PER_DEVICE", "10"))   # asistanın günlük internet araması (cihaz başına)
 AGENT_WEB_DAILY = int(os.getenv("AGENT_WEB_DAILY", "500"))             # tüm kullanıcılar, günlük üst sınır (maliyet koruması)         # Gemini 3: minimal | low | medium | high
 

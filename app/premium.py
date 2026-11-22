@@ -96,6 +96,14 @@ async def status(owner: str) -> dict:
                 if v:
                     await db.put_premium(owner, row["purchase_token"], v["product"], v["state"], v["expires"], v["test"])
                     out = {"active": v["active"], "expires": v["expires"]}
+    if not out.get("active") and owner.startswith("u:") and config.PREMIUM_COMP_EMAILS:
+        # Hediye Premium: Play inceleme hesabı ve ekip (satın alma yok, kampanya sırası almaz)
+        try:
+            u = await db.get_user(owner[2:]) if await db.ensure() else None
+            if u and (u.get("email") or "").lower() in config.PREMIUM_COMP_EMAILS:
+                out = {"active": True, "expires": int(time.time()) + 7 * 86400, "comp": True}
+        except Exception as e:
+            log.warning("Hediye Premium kontrolü: %s", e)
     await cache.set_json(f"prem:{owner}", out, 600)
     return out
 

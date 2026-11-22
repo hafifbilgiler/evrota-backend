@@ -50,7 +50,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 logging.getLogger("httpx").setLevel(logging.WARNING)   # istek URL'lerini (anahtar vb.) loglama
 log = logging.getLogger("evrota")
 
-VERSION = "0.19.1"
+VERSION = "0.19.2"
 
 
 @asynccontextmanager
@@ -756,7 +756,7 @@ async def register_premium(body: PremiumIn, owner: str = Depends(auth.require_ow
 @app.get("/me/premium")
 async def get_premium(owner: str = Depends(auth.require_owner)):
     s = await premium.status(owner)
-    return {"active": s.get("active", False), "expiresAt": s.get("expires", 0)}
+    return {"active": s.get("active", False), "expiresAt": s.get("expires", 0), "comp": bool(s.get("comp"))}
 
 
 # ── Premium alarmları ─────────────────────────────────────────
