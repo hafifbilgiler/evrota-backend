@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: api
-          image: docker.io/hafifbilgiler/evrota-backend:0.16.0
+          image: docker.io/hafifbilgiler/evrota-backend:0.17.0
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
@@ -48,6 +48,10 @@ spec:
               value: "gemini-3.8-flash"
             - name: GEMINI_THINKING_LEVEL    # minimal | low | medium | high (düşük = ucuz, hızlı)
               value: "low"
+            - name: CAMPAIGN_LIMIT           # lansman kampanyası: ilk N premium üyeye kupa (0 = kapalı)
+              value: "10"
+            - name: CAMPAIGN_ALLOW_TEST      # TEST İÇİN true. Yayından önce "false" yap ve campaign_entries tablosunu temizle!
+              value: "true"
             - name: DEEPINFRA_MODEL
               value: "deepseek-ai/DeepSeek-V4-Flash-0731"
             - name: DEEPINFRA_API_KEY

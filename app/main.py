@@ -26,6 +26,7 @@ EVrota backend
   POST/DELETE /stations/{id}/watch  "boşalınca haber ver" (2 saat geçerli, tek seferlik)
   GET/POST /me/premium              Premium durumu · Google Play satın almasını doğrula
   GET/PUT /me/alerts                Premium: favori istasyon ve fiyat alarmları
+  GET /campaign · GET /me/campaign · PUT /me/campaign/address   lansman kupa kampanyası
 """
 import asyncio
 import json
@@ -42,13 +43,13 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel, Field
 
-from . import agent, auth, cache, config, db, google_auth, insights, news, occupancy, places, alerts, premium, profile_ai, push, route_planner, watch
+from . import agent, auth, cache, campaign, config, db, google_auth, insights, news, occupancy, places, alerts, premium, profile_ai, push, route_planner, watch
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)   # istek URL'lerini (anahtar vb.) loglama
 log = logging.getLogger("evrota")
 
-VERSION = "0.16.0"
+VERSION = "0.17.0"
 
 
 @asynccontextmanager
@@ -149,6 +150,7 @@ async def delete_account(uid: str = Depends(auth.require_user)):
     if not await db.ensure():
         raise HTTPException(503, "Şu an kullanılamıyor")
     await db.delete_user(uid)
+    await campaign.forget(f"u:{uid}")
     return {"ok": True}
 
 
@@ -687,7 +689,12 @@ async def register_premium(body: PremiumIn, owner: str = Depends(auth.require_ow
     v = await premium.register(owner, body.purchaseToken)
     if v is None:
         raise HTTPException(422, "Satın alma doğrulanamadı. Birazdan tekrar dene.")
-    return {"active": v["active"], "expiresAt": v["expires"]}
+    slot = None
+    try:
+        slot = await campaign.try_reserve(owner, v)
+    except Exception as e:
+        log.warning("Kampanya sırası verilemedi: %s", e)
+    return {"active": v["active"], "expiresAt": v["expires"], "campaignSlot": slot}
 
 
 @app.get("/me/premium")
@@ -727,3 +734,39 @@ async def put_alerts(body: AlertsIn, owner: str = Depends(auth.require_owner)):
     data = {"stations": [s.model_dump() for s in body.stations], "price": body.price}
     await db.put_data(owner, "alerts", data)
     return {"ok": True, "alerts": data}
+
+
+# ── Lansman kampanyası (ilk 10 premium üyeye kupa) ─────────────
+@app.get("/campaign")
+async def campaign_info(_: str = Depends(auth.require_device)):
+    if not config.CAMPAIGN_LIMIT or not await db.ensure():
+        return {"active": False, "limit": 0, "remaining": 0}
+    left = await campaign.remaining()
+    return {"active": left > 0, "limit": config.CAMPAIGN_LIMIT, "remaining": left}
+
+
+@app.get("/me/campaign")
+async def my_campaign(owner: str = Depends(auth.require_owner)):
+    await _need_db()
+    e = await campaign.entry(owner, await premium.is_premium(owner))
+    return {"entry": e, "signedIn": owner.startswith("u:")}
+
+
+class AddressIn(BaseModel):
+    fullName: str = Field(min_length=3, max_length=100)
+    phone: str = Field(min_length=10, max_length=20, pattern=r"^[0-9 +()-]+$")
+    address: str = Field(min_length=10, max_length=300)
+    district: str = Field(min_length=2, max_length=60)
+    city: str = Field(min_length=2, max_length=40)
+    postalCode: str = Field(default="", max_length=10)
+    brand: str = Field(default="", max_length=40)
+
+
+@app.put("/me/campaign/address")
+async def campaign_address(body: AddressIn, uid: str = Depends(auth.require_user)):
+    await _need_db()
+    addr = body.model_dump(exclude={"brand"})
+    if not await campaign.set_address(f"u:{uid}", addr, body.brand.strip()):
+        raise HTTPException(404, "Kampanya kaydın bulunamadı ya da kupan zaten kargoya verildi")
+    log.info("Kampanya: u:%s adres girdi", uid)
+    return {"ok": True}

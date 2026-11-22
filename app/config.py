@@ -82,3 +82,6 @@ AGENT_DAILY_LIMIT_PREMIUM = int(os.getenv("AGENT_DAILY_LIMIT_PREMIUM", "200"))  
 ROUTE_DAILY_LIMIT_PREMIUM = int(os.getenv("ROUTE_DAILY_LIMIT_PREMIUM", "100"))
 PROFILE_ANALYSIS_DAILY_PREMIUM = int(os.getenv("PROFILE_ANALYSIS_DAILY_PREMIUM", "10"))
 ALERT_INTERVAL = int(os.getenv("ALERT_INTERVAL", "600"))              # premium favori/fiyat alarmları: 10 dk
+# Lansman kampanyası: ilk N premium üyeye markasına özel kupa (0 = kapalı)
+CAMPAIGN_LIMIT = int(os.getenv("CAMPAIGN_LIMIT", "10"))
+CAMPAIGN_ALLOW_TEST = os.getenv("CAMPAIGN_ALLOW_TEST", "false").lower() == "true"   # sadece test için
