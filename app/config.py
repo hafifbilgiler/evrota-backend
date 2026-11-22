@@ -14,6 +14,7 @@ REPORTS_PER_DEVICE_HOUR = int(os.getenv("REPORTS_PER_DEVICE_HOUR", "20"))
 DATA_DIR = os.getenv("DATA_DIR", os.path.join(os.path.dirname(os.path.dirname(__file__)), "data"))
 VEHICLES_FILE = os.getenv("VEHICLES_FILE", os.path.join(DATA_DIR, "vehicles.json"))
 PRICES_FILE = os.getenv("PRICES_FILE", os.path.join(DATA_DIR, "prices.json"))
+SHOP_FILE = os.getenv("SHOP_FILE", os.path.join(DATA_DIR, "shop.json"))   # mağaza: ConfigMap, kapalıysa "Yakında"
 
 # ── Kimlik doğrulama ──
 JWT_SECRET = os.getenv("EVROTA_JWT_SECRET", "")

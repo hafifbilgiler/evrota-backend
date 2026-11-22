@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: api
-          image: docker.io/hafifbilgiler/evrota-backend:0.17.0
+          image: docker.io/hafifbilgiler/evrota-backend:0.18.0
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
@@ -23,6 +23,8 @@ spec:
               value: redis://evrota-redis:6379/0
             - name: PRICES_FILE
               value: /config/prices.json
+            - name: SHOP_FILE
+              value: /config/shop.json
             - name: GOOGLE_PLACES_API_KEY
               valueFrom:
                 secretKeyRef: { name: evrota-secrets, key: GOOGLE_PLACES_API_KEY }
@@ -85,9 +87,14 @@ spec:
       volumes:
         - name: tmp
           emptyDir: {}
-        - name: prices
-          configMap:
-            name: evrota-prices
+        - name: prices                     # /config: fiyatlar + mağaza
+          projected:
+            sources:
+              - configMap:
+                  name: evrota-prices
+              - configMap:
+                  name: evrota-shop
+                  optional: true
         - name: firebase
           secret:
             secretName: evrota-firebase

@@ -27,6 +27,7 @@ EVrota backend
   GET/POST /me/premium              Premium durumu · Google Play satın almasını doğrula
   GET/PUT /me/alerts                Premium: favori istasyon ve fiyat alarmları
   GET /campaign · GET /me/campaign · PUT /me/campaign/address   lansman kupa kampanyası
+  GET /shop                         mağaza (ConfigMap; kapalıyken "Yakında", açılınca Shopier ürün linkleri)
 """
 import asyncio
 import json
@@ -49,7 +50,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 logging.getLogger("httpx").setLevel(logging.WARNING)   # istek URL'lerini (anahtar vb.) loglama
 log = logging.getLogger("evrota")
 
-VERSION = "0.17.0"
+VERSION = "0.18.0"
 
 
 @asynccontextmanager
@@ -195,6 +196,35 @@ async def prices(_: str = Depends(auth.require_device)):
     if not data:
         raise HTTPException(503, "Fiyat bilgisi henüz tanımlı değil")
     return data
+
+
+# ── Mağaza ─────────────────────────────────────────────────────
+# Ürünler ve açık/kapalı durumu k8s/22-configmap-shop.yaml'dan gelir. Ödeme Shopier'de alınır
+# (fiziksel ürün, Play Billing gerekmez); uygulama sadece ürün linkini tarayıcıda açar.
+_SHOP_URL = re.compile(r"^https://[A-Za-z0-9.-]+(/[^\s]*)?$")
+
+
+def _shop_url(u) -> Optional[str]:
+    return u if isinstance(u, str) and _SHOP_URL.match(u) and len(u) < 500 else None
+
+
+@app.get("/shop")
+async def shop(_: str = Depends(auth.require_device)):
+    d = _load_json(config.SHOP_FILE) or {}
+    items = []
+    for p in d.get("products") or []:
+        if not isinstance(p, dict) or not p.get("title"):
+            continue
+        items.append({"id": str(p.get("id") or p["title"])[:60], "title": str(p["title"])[:80],
+                      "description": str(p.get("description") or "")[:300], "price": str(p.get("price") or "")[:30],
+                      "image": _shop_url(p.get("image")), "url": _shop_url(p.get("url")),
+                      "soldOut": bool(p.get("soldOut"))})
+    is_open = bool(d.get("open")) and any(i["url"] for i in items)
+    return {"open": is_open,
+            "title": str(d.get("title") or "EVrota mağaza")[:60],
+            "note": str(d.get("note") or "EVrota kupaları ve aksesuarları yakında burada.")[:300],
+            "storeUrl": _shop_url(d.get("storeUrl")) if is_open else None,
+            "products": items if is_open else items[:6]}   # kapalıyken ürünler "Yakında" önizlemesi olarak döner
 
 
 # ── Şarj istasyonları ──────────────────────────────────────────

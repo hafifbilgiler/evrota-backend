@@ -1,0 +1,25 @@
+# Mağaza: değiştirip `kubectl apply -f k8s/22-configmap-shop.yaml` yapın,
+# pod ~1 dk içinde yeni dosyayı görür (yeniden başlatma gerekmez).
+#
+# Açmak için:
+#   1. Shopier'de ürünleri oluştur, her ürünün linkini "url" alanına yaz (https://www.shopier.com/...)
+#   2. "storeUrl": Shopier mağaza adresin
+#   3. "open": true
+# open=false iken uygulama "Yakında" gösterir; ürünler varsa önizleme olarak listelenir (satın al butonu çıkmaz).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: evrota-shop
+  namespace: evrota
+data:
+  shop.json: |
+    {
+      "open": false,
+      "title": "EVrota mağaza",
+      "note": "EVrota kupaları yakında burada. Rozet ve podyum ödülleri de aynı kupalardan.",
+      "storeUrl": null,
+      "products": [
+        { "id": "kupa-klasik", "title": "EVrota kupası", "description": "Şimşek logolu seramik kupa, 330 ml.", "price": "", "image": null, "url": null },
+        { "id": "kupa-arac", "title": "Aracına özel kupa", "description": "Aracının silüeti ve rengiyle hazırlanan kupa.", "price": "", "image": null, "url": null }
+      ]
+    }
