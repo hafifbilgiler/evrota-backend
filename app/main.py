@@ -15,7 +15,7 @@ EVrota backend
   POST /auth/google                 Google ile giriş (ID token doğrulanır, hesaba bağlı token + yenileme anahtarı)
   POST /auth/logout                 çıkış
   GET  /me · DELETE /me/account     hesap bilgisi · hesabı ve tüm veriyi silme
-  GET/PUT /me/data/{favorites|settings}  favori istasyonlar, ayarlar
+  GET/PUT /me/data/{favorites|settings|routes|progress|trips}  favoriler, ayarlar, rotalar, rozetler, yolculuk özetleri
   GET/PUT /me/profile               kullanıcı profili (araç, ev elektrik fiyatı, alışkanlıklar) — PostgreSQL
   GET/PUT /me/sessions              şarj kayıtları senkronu
   GET  /me/analysis                 AI profil analizi (tasarruf, batarya, saat önerileri)
@@ -50,7 +50,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 logging.getLogger("httpx").setLevel(logging.WARNING)   # istek URL'lerini (anahtar vb.) loglama
 log = logging.getLogger("evrota")
 
-VERSION = "0.18.2"
+VERSION = "0.19.0"
 
 
 @asynccontextmanager
@@ -482,11 +482,18 @@ async def put_my_profile(body: ProfileIn, device: str = Depends(auth.require_own
 
 
 @app.put("/me/sessions")
-async def put_my_sessions(body: list[SessionIn], device: str = Depends(auth.require_owner)):
-    """Telefondaki şarj kayıtlarının tamamı (en fazla 1000) — sunucudaki liste bununla değişir."""
+async def put_my_sessions(body: list[SessionIn], allowEmpty: int = 0, device: str = Depends(auth.require_owner)):
+    """Telefondaki şarj kayıtlarının tamamı (en fazla 1000) — sunucudaki liste bununla değişir.
+    Koruma: boş liste, sunucuda kayıt varken sadece allowEmpty=1 ile kabul edilir (kullanıcı son kaydı sildiyse).
+    Yeni telefonda henüz veri çekilmeden gelen boş liste hesaptaki kayıtları silmesin."""
     await _need_db()
     if len(body) > 1000:
         raise HTTPException(400, "En fazla 1000 kayıt")
+    if not body and not allowEmpty:
+        existing = await db.get_sessions(device)
+        if existing:
+            log.info("Boş şarj listesi yok sayıldı (%s, sunucuda %d kayıt)", device[:12], len(existing))
+            return {"ok": True, "count": len(existing), "ignored": True}
     n = await db.replace_sessions(device, [s.model_dump() for s in body])
     return {"ok": True, "count": n}
 
@@ -497,7 +504,24 @@ async def get_my_sessions(device: str = Depends(auth.require_owner)):
     return {"sessions": await db.get_sessions(device)}
 
 
-_DATA_KEYS = {"favorites", "settings", "routes"}
+_DATA_KEYS = {"favorites", "settings", "routes", "progress", "trips"}   # progress: rozet ve sayaçlar; trips: yolculuk özetleri (konum yok)
+
+
+def _merge_progress(old, new: dict) -> dict:
+    """Rozetler: her seviye için en eski kazanma tarihi; sayaçlar: büyük olan; ilk kullanım: küçük olan."""
+    if not isinstance(old, dict):
+        return new
+    ob, nb = old.get("badges") or {}, new.get("badges") or {}
+    badges = {}
+    for bid in set(ob) | set(nb):
+        a = list(ob.get(bid) or []) + [0, 0, 0]
+        b = list(nb.get(bid) or []) + [0, 0, 0]
+        badges[bid] = [min([x for x in (a[k], b[k]) if isinstance(x, (int, float)) and x > 0], default=0) for k in range(3)]
+    oc, nc = old.get("counters") or {}, new.get("counters") or {}
+    counters = {k: max(int(oc.get(k) or 0), int(nc.get(k) or 0)) for k in ("rated", "reports")}
+    fs = [int(x) for x in (oc.get("firstSeen"), nc.get("firstSeen")) if isinstance(x, (int, float)) and x > 0]
+    counters["firstSeen"] = min(fs) if fs else 0
+    return {**old, **new, "badges": badges, "counters": counters}
 
 
 @app.get("/me/data/{key}")
@@ -521,6 +545,8 @@ async def put_my_data(key: str, request: Request, owner: str = Depends(auth.requ
         data = json.loads(raw or b"null")
     except ValueError:
         raise HTTPException(400, "Geçersiz JSON")
+    if key == "progress" and isinstance(data, dict):
+        data = _merge_progress(await db.get_data(owner, key), data)   # rozet seviyesi hiçbir zaman geri alınmaz
     await db.put_data(owner, key, data)
     return {"ok": True}
 

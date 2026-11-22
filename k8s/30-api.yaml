@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: api
-          image: docker.io/hafifbilgiler/evrota-backend:0.18.2
+          image: docker.io/hafifbilgiler/evrota-backend:0.19.0
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
