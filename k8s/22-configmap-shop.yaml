@@ -5,6 +5,7 @@
 #   1. Shopier'de ürünleri oluştur, her ürünün linkini "url" alanına yaz (https://www.shopier.com/...)
 #   2. "storeUrl": Shopier mağaza adresin
 #   3. "open": true
+# Ürünlerde araç markası ve logosu kullanılmaz (marka hakkı): EVrota sembolleri ve şarj sözleri.
 # open=false iken uygulama "Yakında" gösterir; ürünler varsa önizleme olarak listelenir (satın al butonu çıkmaz).
 apiVersion: v1
 kind: ConfigMap
@@ -16,10 +17,11 @@ data:
     {
       "open": false,
       "title": "EVrota mağaza",
-      "note": "EVrota kupaları yakında burada. Rozet ve podyum ödülleri de aynı kupalardan.",
+      "note": "EVrota kupaları ve anahtarlıkları yakında burada. Rozet ve podyum ödülleri de aynı kupalardan.",
       "storeUrl": null,
       "products": [
         { "id": "kupa-klasik", "title": "EVrota kupası", "description": "Şimşek logolu seramik kupa, 330 ml.", "price": "", "image": null, "url": null },
-        { "id": "kupa-arac", "title": "Aracına özel kupa", "description": "Aracının silüeti ve rengiyle hazırlanan kupa.", "price": "", "image": null, "url": null }
+        { "id": "kupa-soz", "title": "Şarj sözleri kupası", "description": "Elektrikli sürücülerin dilinden sözlerle seramik kupa.", "price": "", "image": null, "url": null },
+        { "id": "anahtarlik", "title": "EVrota anahtarlık", "description": "Şarj fişi ve şimşek temalı metal anahtarlık.", "price": "", "image": null, "url": null }
       ]
     }

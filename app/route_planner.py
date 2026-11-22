@@ -198,7 +198,7 @@ async def plan(device: str, origin: dict, dest: dict, vehicle_id: Optional[str],
     cat = {x["id"]: x for x in news._catalog()}
     v = cat.get(vehicle_id or "")
     if not v:
-        return {"error": "Önce Araçlar sekmesinden aracını seç"}
+        return {"error": "Önce aracını seç: Ben, Profil, Aracım"}
     if not config.ROUTES_KEY:
         return {"error": "Rota planlayıcı şu an kullanılamıyor"}
 

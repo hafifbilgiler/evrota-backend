@@ -1,6 +1,7 @@
 """
 Lansman kampanyası: ücretsiz denemeden sonra ücretli Premium'a geçen ilk N (varsayılan 10) üyeye
-aracının markasına özel EVrota kupası.
+şarj temalı EVrota kupası
+(kupada araç markası/logosu kullanılmaz; "brand" sütunu bilgi amaçlı araç markası ya da kullanıcının kupa notu).
 Kurallar:
   - Google ile giriş yapmış hesap ("u:<id>"), Google Play'de doğrulanmış ve İLK ÖDEMESİ ALINMIŞ abonelik
     (deneme süresindeki üye sıra almaz)
