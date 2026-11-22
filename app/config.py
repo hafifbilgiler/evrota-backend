@@ -30,7 +30,9 @@ NEWS_FEEDS_FILE = os.getenv("NEWS_FEEDS_FILE", os.path.join(DATA_DIR, "news_feed
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")            # asistan + araç değerlendirmesi
 NEWS_GEMINI_MODEL = os.getenv("NEWS_GEMINI_MODEL", GEMINI_MODEL)          # haber özetleme (ucuz model varsa env ile)
-GEMINI_THINKING_LEVEL = os.getenv("GEMINI_THINKING_LEVEL", "low")         # Gemini 3: minimal | low | medium | high
+GEMINI_THINKING_LEVEL = os.getenv("GEMINI_THINKING_LEVEL", "low")
+AGENT_WEB_PER_DEVICE = int(os.getenv("AGENT_WEB_PER_DEVICE", "10"))   # asistanın günlük internet araması (cihaz başına)
+AGENT_WEB_DAILY = int(os.getenv("AGENT_WEB_DAILY", "500"))             # tüm kullanıcılar, günlük üst sınır (maliyet koruması)         # Gemini 3: minimal | low | medium | high
 
 
 def gemini_config(model: str, temperature: float, max_tokens: int, json_mode: bool = False) -> dict:

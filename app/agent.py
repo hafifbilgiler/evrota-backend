@@ -31,7 +31,12 @@ Kurallar:
 - Türkçe, samimi ve kısa yaz (genelde 2-6 cümle ya da kısa maddeler).
 - İstasyon, araç, menzil, yolculuk ve maliyet sorularında MUTLAKA araçları (fonksiyonları) kullan; teknik değer uydurma.
 - Katalogda olmayan araç için genel bilgi verebilirsin ama "katalogda yok, değerler yaklaşık" de.
-- Fiyat (TL) tahmini yapma; araç satış fiyatı sorulursa bilmediğini söyle.
+- Bugünün tarihi: {today}. Bilgilerin bu tarihten eski olabilir.
+- Şarj ücreti (kWh fiyatı) sorulursa ÖNCE sarj_fiyatlari fonksiyonunu kullan; verinin tarihini ve kaynağını söyle,
+  "ödeme öncesi operatörün uygulamasından doğrula" diye ekle. Orada olmayan operatör için internette_ara kullan.
+- Güncel olabilecek her şeyde (fiyatlar, zamlar, yeni modeller, araç satış fiyatları, teşvikler, yönetmelikler,
+  yeni istasyonlar, haberler) hafızandan rakam VERME; internette_ara ile bak ve kaynağın adını yaz.
+  Arama sonuç vermezse bilmediğini açıkça söyle.
 - Konum gerekiyorsa ve verilmediyse kullanıcıdan uygulamada konum iznini açmasını iste.
 - Elektrikli araçlar, şarj, batarya bakımı, yolculuk planı dışındaki konularda kibarca konuya dön.
 - Güvenlikle ilgili konularda (ör. arızalı soket, yanık kablo) önce güvenliği öner.
@@ -73,6 +78,15 @@ TOOLS = [{"functionDeclarations": [
          "varis": {"type": "string", "description": "Varış yeri, ör. 'Antalya' veya 'Ankara Kızılay'"},
          "baslangic_yuzde": {"type": "integer", "description": "Çıkıştaki şarj %, bilinmiyorsa 80"}},
          "required": ["varis"]}},
+    {"name": "sarj_fiyatlari",
+     "description": "Türkiye'deki şarj operatörlerinin güncel AC/DC kWh fiyatları (EVrota'nın düzenli güncellediği liste, tarihli).",
+     "parameters": {"type": "object", "properties": {
+         "operator": {"type": "string", "description": "İsteğe bağlı operatör adı, ör. ZES, Trugo, Eşarj"}}}},
+    {"name": "internette_ara",
+     "description": "Güncel bilgi için internette arar (Google). Fiyat, zam, yeni model, teşvik, haber gibi değişebilen konularda kullan.",
+     "parameters": {"type": "object", "properties": {
+         "sorgu": {"type": "string", "description": "Türkçe arama sorgusu, ör. 'Trugo DC şarj fiyatı Kasım 2026'"}},
+         "required": ["sorgu"]}},
     {"name": "maliyet_hesapla",
      "description": "Mesafe, tüketim ve kWh fiyatıyla şarj maliyetini hesaplar.",
      "parameters": {"type": "object", "properties": {
@@ -109,8 +123,75 @@ def _avg_dc_price() -> Optional[float]:
         return None
 
 
+def _prices_data() -> dict:
+    try:
+        with open(config.PRICES_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+async def _web_search(query: str, device: str) -> dict:
+    """Gemini + Google Search ile güncel bilgi: kısa özet ve kaynaklar. 6 saat önbellek, cihaz ve günlük sınır."""
+    query = " ".join(str(query).split())[:160]
+    if not query:
+        return {"hata": "Sorgu boş"}
+    if not config.GEMINI_API_KEY:
+        return {"hata": "İnternet araması şu an kullanılamıyor"}
+    key = "agent:web:" + query.lower()
+    hit = await cache.get_json(key)
+    if hit:
+        return hit
+    day = time.strftime("%Y%m%d", time.gmtime())
+    if await cache.incr(f"agent:webd:{device}:{day}", 90000) > config.AGENT_WEB_PER_DEVICE or \
+            await cache.incr(f"agent:webt:{day}", 90000) > config.AGENT_WEB_DAILY:
+        return {"hata": "Bugünkü internet araması sınırı doldu; bildiklerinle ve tarih belirterek cevap ver"}
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{config.GEMINI_MODEL}:generateContent"
+    body = {"systemInstruction": {"parts": [{"text":
+                "Türkiye'deki elektrikli araç kullanıcısı için internette ara. Bulduğun en güncel bilgiyi kısa maddelerle, "
+                "rakamları ve bilginin tarihini belirterek Türkçe özetle. Emin olmadığın rakamı yazma. Bugün: "
+                + time.strftime("%d.%m.%Y")}]},
+            "contents": [{"role": "user", "parts": [{"text": query}]}],
+            "tools": [{"google_search": {}}],
+            "generationConfig": config.gemini_config(config.GEMINI_MODEL, 0.2, 700)}
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=5.0)) as client:
+            r = await client.post(url, headers={"x-goog-api-key": config.GEMINI_API_KEY}, json=body)
+        if r.status_code != 200:
+            log.warning("İnternet araması HTTP %s: %s", r.status_code, r.text[:200])
+            return {"hata": "İnternet araması şu an yapılamadı"}
+        cand = (r.json().get("candidates") or [{}])[0]
+        text = "".join(p.get("text", "") for p in (cand.get("content") or {}).get("parts") or []).strip()
+        chunks = (cand.get("groundingMetadata") or {}).get("groundingChunks") or []
+        sources = []
+        for c in chunks:
+            w = c.get("web") or {}
+            if w.get("title") and w["title"] not in sources:
+                sources.append(w["title"])
+        out = {"ozet": text[:1800], "kaynaklar": sources[:5], "tarih": time.strftime("%d.%m.%Y")}
+        if text:
+            await cache.set_json(key, out, 6 * 3600)
+        return out
+    except Exception as e:
+        log.warning("İnternet araması hatası: %s", e)
+        return {"hata": "İnternet araması şu an yapılamadı"}
+
+
 async def _run_tool(name: str, args: dict, ctx: dict, stations_fn) -> dict:
     cat = news._catalog()
+    if name == "sarj_fiyatlari":
+        d = _prices_data()
+        ch = d.get("charging") or {}
+        ops = ch.get("operators") or []
+        want = str(args.get("operator") or "").strip().lower()
+        if want:
+            ops = [o for o in ops if want in str(o.get("name", "")).lower()] or ops
+        if not ops:
+            return {"hata": "Fiyat listesi tanımlı değil; internette_ara ile bak"}
+        return {"guncelleme": d.get("updated"), "kaynak": ch.get("source"), "not": ch.get("note"),
+                "dc_ortalama": ch.get("dcAvgTlKwh"), "ac_ortalama": ch.get("acAvgTlKwh"), "operatorler": ops[:15]}
+    if name == "internette_ara":
+        return await _web_search(args.get("sorgu", ""), ctx.get("_device", "?"))
     if name == "yakin_istasyonlar":
         if ctx.get("lat") is None:
             return {"hata": "Konum yok. Kullanıcı uygulamada konum iznini açmalı."}
@@ -325,7 +406,7 @@ async def chat(device: str, messages: list, ctx: dict,
     if not history or history[-1]["role"] != "user":
         return {"reply": "Bir soru yazar mısın?", "available": True}
 
-    system = SYSTEM.format(ctx=ctx_text)
+    system = SYSTEM.format(ctx=ctx_text, today=time.strftime("%d.%m.%Y"))
     async with httpx.AsyncClient(timeout=httpx.Timeout(40.0, connect=5.0)) as client:
         for name, fn in providers:
             used_tools: list = []

@@ -9,8 +9,90 @@ metadata:
 data:
   prices.json: |
     {
-      "updated": "",
-      "electricity": { "homeTlKwh": null, "source": "" },
-      "fuel": { "benzinTlL": null, "motorinTlL": null, "source": "" },
-      "charging": { "dcAvgTlKwh": null, "acAvgTlKwh": null, "operators": [] }
+      "updated": "2026-11-22",
+      "electricity": {
+        "homeTlKwh": null,
+        "source": ""
+      },
+      "fuel": {
+        "benzinTlL": null,
+        "motorinTlL": null,
+        "source": ""
+      },
+      "charging": {
+        "dcAvgTlKwh": 14.08,
+        "acAvgTlKwh": 10.43,
+        "source": "Operatörlerin resmi tarifeleri; derleme: elektrikliturkiye.com (Eylül-Ekim 2026), donanimhaber.com, chargemate.io",
+        "note": "KDV dahil TL/kWh. Fiyatlar sık değişir; ödeme öncesi operatörün uygulamasından doğrulayın.",
+        "operators": [
+          {
+            "name": "ZES",
+            "dcTlKwh": 12.99,
+            "acTlKwh": 10.99,
+            "not": "DC-1 12,99; DC-2 (yüksek güç) 16,49"
+          },
+          {
+            "name": "Trugo",
+            "dcTlKwh": 14.98,
+            "acTlKwh": 9.95,
+            "not": "DC lokasyona göre 12,00-14,98"
+          },
+          {
+            "name": "Eşarj",
+            "dcTlKwh": 14.9,
+            "acTlKwh": 9.9,
+            "not": "DC istasyona göre 9,90-14,90"
+          },
+          {
+            "name": "Voltrun",
+            "dcTlKwh": 13.9,
+            "acTlKwh": 10.9,
+            "not": "Eylül 2026 verisi"
+          },
+          {
+            "name": "Tesla",
+            "dcTlKwh": 13.0,
+            "not": "Tesla dışı araçlar; Tesla sahipleri ve üyelikle 10,40"
+          },
+          {
+            "name": "Astor",
+            "dcTlKwh": 13.99,
+            "acTlKwh": 9.89
+          },
+          {
+            "name": "Beefull",
+            "dcTlKwh": 13.99,
+            "acTlKwh": 9.9
+          },
+          {
+            "name": "WAT Mobilite",
+            "dcTlKwh": 14.49,
+            "acTlKwh": 10.99,
+            "not": "DC 10,99-14,49"
+          },
+          {
+            "name": "Shell Recharge",
+            "dcTlKwh": 15.99,
+            "acTlKwh": 11.99,
+            "not": "DC 12,99-15,99"
+          },
+          {
+            "name": "Aksa Şarj",
+            "dcTlKwh": 13.99,
+            "acTlKwh": 10.9,
+            "not": "DC 11,99-13,99; AC 9,90-10,90"
+          },
+          {
+            "name": "D-Charge",
+            "dcTlKwh": 14.9,
+            "acTlKwh": 10.9
+          },
+          {
+            "name": "TÜVTÜRK",
+            "dcTlKwh": 11.8,
+            "acTlKwh": 8.45,
+            "not": "Ekim 2026'da eklendi"
+          }
+        ]
+      }
     }
