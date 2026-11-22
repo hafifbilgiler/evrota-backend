@@ -51,8 +51,24 @@ async def verify(token: str) -> Optional[dict]:
         return None
     expires = max(_ts(i.get("expiryTime")) for i in items)
     state = d.get("subscriptionState", "")
+    active = state in _VALID and expires > time.time()
     return {"state": state, "expires": expires, "product": config.PREMIUM_PRODUCT,
-            "test": "testPurchase" in d, "active": state in _VALID and expires > time.time()}
+            "test": "testPurchase" in d, "active": active, "paid": active and _paid(items)}
+
+
+def _paid(items: list) -> bool:
+    """Ücretsiz deneme bitti, en az bir ödeme alındı mı?
+    offerPhase varsa ona bakılır (freeTrial = deneme). Yoksa: yenileme siparişlerinin numarası
+    "GPA.xxxx..0" gibi ".." içerir; ilk sipariş deneme siparişidir."""
+    for i in items:
+        ph = i.get("offerPhase")
+        if isinstance(ph, dict) and ph:
+            if "freeTrial" not in ph:
+                return True
+            continue
+        if ".." in (i.get("latestSuccessfulOrderId") or ""):
+            return True
+    return False
 
 
 async def register(owner: str, token: str) -> Optional[dict]:

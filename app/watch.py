@@ -108,6 +108,8 @@ async def loop() -> None:
                 from . import alerts
                 await alerts.check_stations()
                 await alerts.check_prices(_prices())
+                from . import campaign
+                await campaign.sweep()
         except asyncio.CancelledError:
             raise
         except Exception as e:

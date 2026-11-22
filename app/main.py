@@ -50,7 +50,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 logging.getLogger("httpx").setLevel(logging.WARNING)   # istek URL'lerini (anahtar vb.) loglama
 log = logging.getLogger("evrota")
 
-VERSION = "0.18.0"
+VERSION = "0.18.1"
 
 
 @asynccontextmanager
@@ -778,8 +778,13 @@ async def campaign_info(_: str = Depends(auth.require_device)):
 @app.get("/me/campaign")
 async def my_campaign(owner: str = Depends(auth.require_owner)):
     await _need_db()
+    try:
+        await campaign.check(owner)
+    except Exception as ex:
+        log.warning("Kampanya kontrolü: %s", ex)
     e = await campaign.entry(owner, await premium.is_premium(owner))
-    return {"entry": e, "signedIn": owner.startswith("u:")}
+    left = await campaign.remaining() if config.CAMPAIGN_LIMIT else 0
+    return {"entry": e, "signedIn": owner.startswith("u:"), "remaining": left}
 
 
 class AddressIn(BaseModel):

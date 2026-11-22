@@ -1,11 +1,13 @@
 """
-Lansman kampanyası: ilk N (varsayılan 10) premium üyeye aracının markasına özel EVrota kupası.
+Lansman kampanyası: ücretsiz denemeden sonra ücretli Premium'a geçen ilk N (varsayılan 10) üyeye
+aracının markasına özel EVrota kupası.
 Kurallar:
-  - Google ile giriş yapmış hesap ("u:<id>"), doğrulanmış Google Play aboneliği
+  - Google ile giriş yapmış hesap ("u:<id>"), Google Play'de doğrulanmış ve İLK ÖDEMESİ ALINMIŞ abonelik
+    (deneme süresindeki üye sıra almaz)
   - Test satın almaları sayılmaz (CAMPAIGN_ALLOW_TEST=true ile geçici olarak sayılabilir)
-  - Sıra, aboneliğin sunucuda ilk doğrulandığı an; her hesaba bir hak, boşalan sıra yeniden dağıtılmaz
-  - Kargo, deneme süresi bitip abonelik hâlâ aktifken (ilk ödeme alınmış) yapılır
-Durumlar: reserved → address_given → ready (ödeme alındı) → shipped
+  - Sıra, ilk ödemenin sunucuda görüldüğü an; her hesaba bir hak, boşalan sıra yeniden dağıtılmaz
+  - Ödeme görülme anları: uygulama açılınca (GET /me/campaign, POST /me/premium) ve arka planda sweep()
+Durumlar: reserved → address_given → ready (yönetici hazırlıyor) → shipped
 """
 import json
 import logging
@@ -15,7 +17,6 @@ from typing import Optional
 from . import config, db, news
 
 log = logging.getLogger("evrota.campaign")
-TRIAL_SECONDS = 7 * 86400
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS campaign_entries (
@@ -55,7 +56,7 @@ async def remaining() -> int:
 
 async def try_reserve(owner: str, verified: dict) -> Optional[int]:
     """Premium doğrulanınca çağrılır. Uygunsa sıra numarası verir."""
-    if not config.CAMPAIGN_LIMIT or not owner.startswith("u:") or not verified.get("active"):
+    if not config.CAMPAIGN_LIMIT or not owner.startswith("u:") or not verified.get("paid"):
         return None
     if verified.get("test") and not config.CAMPAIGN_ALLOW_TEST:
         return None
@@ -83,16 +84,11 @@ async def entry(owner: str, premium_active: bool) -> Optional[dict]:
     if not row:
         return None
     status = row["status"]
-    # Deneme bitti ve abonelik hâlâ aktifse (ilk ödeme alındı) kargoya hazır
-    if status == "address_given" and premium_active and time.time() - row["started"] > TRIAL_SECONDS:
-        status = "ready"
-        async with db._pool.acquire() as c:
-            await c.execute("UPDATE campaign_entries SET status='ready', updated_at=now() WHERE owner=$1", owner)
     addr = row["address"]
     if isinstance(addr, str):
         addr = json.loads(addr)
     return {"slot": row["slot"], "brand": row["brand"], "vehicle": row["vehicle"], "status": status,
-            "address": addr, "tracking": row["tracking"], "shipAfter": row["started"] + TRIAL_SECONDS}
+            "address": addr, "tracking": row["tracking"]}
 
 
 async def set_address(owner: str, addr: dict, brand: str) -> bool:
@@ -114,3 +110,51 @@ async def forget(owner: str) -> None:
                             "updated_at=now() WHERE owner=$1", owner)
     except Exception as e:
         log.warning("Kampanya kaydı silinemedi: %s", e)
+
+
+async def check(owner: str) -> Optional[int]:
+    """Uygulama kampanya kartını açınca: kontenjan varsa ve kaydı yoksa aboneliği Play'e yeniden sor
+    (en fazla 10 dakikada bir), ilk ödeme alınmışsa sıra ver."""
+    if not config.CAMPAIGN_LIMIT or not owner.startswith("u:"):
+        return None
+    from . import cache, premium
+    r = cache.client()
+    if r is not None and not await r.set(f"camp:chk:{owner}", "1", nx=True, ex=600):
+        return None
+    await _ensure_schema()
+    async with db._pool.acquire() as c:
+        if await c.fetchval("SELECT 1 FROM campaign_entries WHERE owner=$1", owner):
+            return None
+    if await remaining() <= 0:
+        return None
+    row = await db.latest_premium(owner)
+    if not row:
+        return None
+    v = await premium.verify(row["purchase_token"])
+    if not v:
+        return None
+    await db.put_premium(owner, row["purchase_token"], v["product"], v["state"], v["expires"], v["test"])
+    if r is not None:
+        await r.delete(f"prem:{owner}")
+    return await try_reserve(owner, v)
+
+
+async def sweep(limit: int = 20) -> None:
+    """Arka plan: deneme süresi bitmiş (kayıtlı bitiş geçmiş) ve henüz sırası olmayan girişli üyeleri
+    Play'e sorar; yenilenip ödeme alınmışsa sıra verir. Uygulamayı açmayan kazananlar da kaçmasın."""
+    if not config.CAMPAIGN_LIMIT or not await db.ensure() or await remaining() <= 0:
+        return
+    from . import premium
+    async with db._pool.acquire() as c:
+        rows = await c.fetch("""SELECT DISTINCT ON (p.owner) p.owner, p.purchase_token FROM premium_subs p
+                                WHERE p.owner LIKE 'u:%' AND p.expires_at < now() AND p.checked_at < now() - interval '30 minutes'
+                                  AND p.expires_at > now() - interval '3 days'
+                                  AND NOT EXISTS (SELECT 1 FROM campaign_entries e WHERE e.owner = p.owner)
+                                ORDER BY p.owner, p.expires_at DESC LIMIT $1""", limit)
+    for r in rows:
+        v = await premium.verify(r["purchase_token"])
+        if not v:
+            continue
+        await db.put_premium(r["owner"], r["purchase_token"], v["product"], v["state"], v["expires"], v["test"])
+        if await try_reserve(r["owner"], v) is not None and await remaining() <= 0:
+            return
